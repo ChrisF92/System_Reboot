@@ -95,6 +95,18 @@ public sealed class GameDbContext : DbContext
                 .IsRequired();
             player.Property(entity => entity.QuantumCores)
                 .IsRequired();
+            player.Property(entity => entity.Processing)
+                .IsRequired();
+            player.Property(entity => entity.Integrity)
+                .IsRequired();
+            player.Property(entity => entity.Output)
+                .IsRequired();
+            player.Property(entity => entity.Hardening)
+                .IsRequired();
+            player.Property(entity => entity.Efficiency)
+                .IsRequired();
+            player.Property(entity => entity.Bandwidth)
+                .IsRequired();
             player.Property(entity => entity.CreatedAtUtc)
                 .IsRequired();
             player.Property(entity => entity.LastResourceClaimedAtUtc)

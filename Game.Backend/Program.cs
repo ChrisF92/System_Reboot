@@ -8,6 +8,7 @@ using Game.Backend.Modules.Idempotency;
 using Game.Backend.Modules.Players;
 using Game.Backend.Modules.Purchases;
 using Game.Backend.Modules.Resources;
+using Game.Backend.Modules.Training;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 
@@ -49,6 +50,8 @@ builder.Services.AddScoped<IdempotencyRepository>();
 builder.Services.AddScoped<IdempotencyService>();
 builder.Services.AddScoped<GameConfigRepository>();
 builder.Services.AddScoped<GameConfigService>();
+builder.Services.AddScoped<TrainingRepository>();
+builder.Services.AddScoped<TrainingService>();
 
 var app = builder.Build();
 

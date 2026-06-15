@@ -42,6 +42,12 @@ public sealed class PlayerRepository
             Data = player.Resources.Data,
             CoreFragments = player.Resources.CoreFragments,
             QuantumCores = player.Resources.QuantumCores,
+            Processing = player.Training.Processing,
+            Integrity = player.Training.Integrity,
+            Output = player.Training.Output,
+            Hardening = player.Training.Hardening,
+            Efficiency = player.Training.Efficiency,
+            Bandwidth = player.Training.Bandwidth,
             CreatedAtUtc = player.CreatedAtUtc,
             LastResourceClaimedAtUtc = player.LastResourceClaimedAtUtc
         };
@@ -61,6 +67,13 @@ public sealed class PlayerRepository
                 entity.Data,
                 entity.CoreFragments,
                 entity.QuantumCores),
+            new TrainingStats(
+                entity.Processing,
+                entity.Integrity,
+                entity.Output,
+                entity.Hardening,
+                entity.Efficiency,
+                entity.Bandwidth),
             entity.CreatedAtUtc,
             entity.LastResourceClaimedAtUtc);
     }

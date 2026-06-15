@@ -35,6 +35,7 @@ public sealed class PlayerService
             Level: 1,
             Xp: 0,
             Resources: new ResourceWallet(0, 0, 0, 0, 0),
+            Training: new TrainingStats(1, 1, 1, 1, 1, 1),
             CreatedAtUtc: now,
             LastResourceClaimedAtUtc: now);
 

@@ -22,6 +22,18 @@ public sealed class PlayerEntity
 
     public long QuantumCores { get; set; }
 
+    public int Processing { get; set; }
+
+    public int Integrity { get; set; }
+
+    public int Output { get; set; }
+
+    public int Hardening { get; set; }
+
+    public int Efficiency { get; set; }
+
+    public int Bandwidth { get; set; }
+
     public DateTimeOffset CreatedAtUtc { get; set; }
 
     public DateTimeOffset LastResourceClaimedAtUtc { get; set; }

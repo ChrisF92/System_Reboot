@@ -61,6 +61,21 @@ Authorization: Bearer {{AccessToken}}
 
 ###
 
+GET {{Game.Backend_HostAddress}}/api/v1/players/00000000-0000-0000-0000-000000000000/training
+Authorization: Bearer {{AccessToken}}
+
+###
+
+POST {{Game.Backend_HostAddress}}/api/v1/players/00000000-0000-0000-0000-000000000000/training/processing/upgrade
+Content-Type: application/json
+Authorization: Bearer {{AccessToken}}
+
+{
+  "requestId": "training-processing-request-001"
+}
+
+###
+
 POST {{Game.Backend_HostAddress}}/api/v1/purchases/validate
 Content-Type: application/json
 Authorization: Bearer {{AccessToken}}

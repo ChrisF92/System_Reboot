@@ -10,6 +10,7 @@ This backend starts from the priorities in `system_reboot_gdd.md` and `cursor_cs
 - `Auth` owns account registration, login, and bearer sessions.
 - `Resources` owns server-authoritative Matter, Energy, Data balances and offline claims.
 - `Purchases` owns receipt validation and non-power entitlement grants.
+- `Training` owns server-authoritative stat levels and resource spending for stat upgrades.
 
 ## Current storage
 
@@ -25,12 +26,13 @@ Repositories use EF Core with SQLite. The default local database is `system-rebo
 - Player and cloud-save routes require bearer authentication.
 - Player and cloud-save access is limited to the owning account.
 - Resource balances and offline claims are calculated by the backend from active game config, not accepted from cloud-save JSON.
+- Training upgrades spend backend-owned resources using active game config costs.
 - Purchases require an owned player, validated receipt, and non-power product id.
-- Offline resource claims and purchase validation require `requestId` for idempotent retries.
+- Offline resource claims, training upgrades, and purchase validation require `requestId` for idempotent retries.
 
 ## Next backend steps
 
 1. Replace the local mock purchase validator with real Android purchase validation.
 2. Add admin-only endpoints or tooling for uploading and activating game config versions.
-3. Add rate limits for auth, save, resource, and purchase endpoints.
+3. Add rate limits for auth, save, resource, training, and purchase endpoints.
 4. Move additional progression state out of opaque cloud-save JSON as gameplay systems come online.

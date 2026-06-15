@@ -4,6 +4,7 @@ public sealed record GameConfigResponse(
     string ConfigVersion,
     ResourceGenerationConfig Resources,
     OfflineProgressConfig OfflineProgress,
+    TrainingConfig Training,
     CombatConfig Combat,
     IReadOnlyList<ResourceDefinitionResponse> ResourceDefinitions);
 
@@ -15,6 +16,15 @@ public sealed record ResourceGenerationConfig(
 public sealed record OfflineProgressConfig(
     int EarlyOfflineCapSeconds,
     decimal BaseOfflineEfficiency);
+
+public sealed record TrainingConfig(IReadOnlyList<TrainingStatDefinitionResponse> Stats);
+
+public sealed record TrainingStatDefinitionResponse(
+    string StatId,
+    string DisplayName,
+    long MatterCost,
+    long EnergyCost,
+    long DataCost);
 
 public sealed record CombatConfig(
     int EarlyLoadoutSlots,

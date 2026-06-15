@@ -9,6 +9,7 @@ using Game.Backend.Modules.GameConfig;
 using Game.Backend.Modules.Players;
 using Game.Backend.Modules.Purchases;
 using Game.Backend.Modules.Resources;
+using Game.Backend.Modules.Training;
 using Microsoft.EntityFrameworkCore;
 
 namespace Game.Backend.Tests;
@@ -226,6 +227,137 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
         Authorize(_client, intruderAuth.AccessToken);
 
         var response = await _client.GetAsync($"/api/v1/players/{player.PlayerId}/resources");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.NotEqual(ownerAuth.AccountId, intruderAuth.AccountId);
+
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"player_forbidden\"", json);
+    }
+
+    [Fact]
+    public async Task Training_Get_ReturnsStartingStatsAndConfigCosts()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("TrainingNode");
+
+        var training = await _client.GetFromJsonAsync<TrainingResponse>(
+            $"/api/v1/players/{player.PlayerId}/training",
+            JsonOptions.Default);
+
+        Assert.NotNull(training);
+        Assert.Equal(player.PlayerId, training.PlayerId);
+        Assert.All(training.Stats, stat => Assert.Equal(1, stat.Level));
+
+        var processing = Assert.Single(training.Stats, stat => stat.StatId == "processing");
+        Assert.Equal("Processing", processing.DisplayName);
+        Assert.Equal(10, processing.NextUpgradeCost.Matter);
+        Assert.Equal(5, processing.NextUpgradeCost.Energy);
+        Assert.Equal(2, processing.NextUpgradeCost.Data);
+    }
+
+    [Fact]
+    public async Task Training_Upgrade_SpendsResourcesAndIncrementsStat()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("UpgradeNode");
+        await AddResourcesAsync(player.PlayerId, matter: 100, energy: 100, data: 100);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/training/processing/upgrade",
+            new UpgradeTrainingRequest("training-upgrade-request"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var upgrade = await response.Content.ReadFromJsonAsync<UpgradeTrainingResponse>(JsonOptions.Default);
+        Assert.NotNull(upgrade);
+        Assert.Equal("processing", upgrade.UpgradedStat.StatId);
+        Assert.Equal(2, upgrade.UpgradedStat.Level);
+        Assert.Equal(10, upgrade.CostPaid.Matter);
+        Assert.Equal(5, upgrade.CostPaid.Energy);
+        Assert.Equal(2, upgrade.CostPaid.Data);
+        Assert.Equal(90, upgrade.Resources.Matter);
+        Assert.Equal(95, upgrade.Resources.Energy);
+        Assert.Equal(98, upgrade.Resources.Data);
+        Assert.Equal(20, upgrade.UpgradedStat.NextUpgradeCost.Matter);
+    }
+
+    [Fact]
+    public async Task Training_Upgrade_RejectsInsufficientResources()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("PoorTrainingNode");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/training/processing/upgrade",
+            new UpgradeTrainingRequest("training-insufficient-request"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"insufficient_resources\"", json);
+    }
+
+    [Fact]
+    public async Task Training_Upgrade_ReplaysIdenticalRetry()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("TrainingReplayNode");
+        await AddResourcesAsync(player.PlayerId, matter: 100, energy: 100, data: 100);
+        var request = new UpgradeTrainingRequest("training-replay-request");
+
+        var firstResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/training/output/upgrade",
+            request);
+        firstResponse.EnsureSuccessStatusCode();
+        var firstUpgrade = await firstResponse.Content.ReadFromJsonAsync<UpgradeTrainingResponse>(JsonOptions.Default);
+
+        var retryResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/training/output/upgrade",
+            request);
+        retryResponse.EnsureSuccessStatusCode();
+        var retryUpgrade = await retryResponse.Content.ReadFromJsonAsync<UpgradeTrainingResponse>(JsonOptions.Default);
+
+        Assert.NotNull(firstUpgrade);
+        Assert.NotNull(retryUpgrade);
+        Assert.Equal(firstUpgrade.UpgradedStat.Level, retryUpgrade.UpgradedStat.Level);
+        Assert.Equal(firstUpgrade.Resources.Matter, retryUpgrade.Resources.Matter);
+        Assert.Equal(firstUpgrade.Resources.Energy, retryUpgrade.Resources.Energy);
+        Assert.Equal(firstUpgrade.Resources.Data, retryUpgrade.Resources.Data);
+    }
+
+    [Fact]
+    public async Task Training_Upgrade_RejectsReusedRequestIdWithDifferentStat()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("TrainingMismatchNode");
+        await AddResourcesAsync(player.PlayerId, matter: 100, energy: 100, data: 100);
+        var request = new UpgradeTrainingRequest("training-mismatch-request");
+
+        var firstResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/training/processing/upgrade",
+            request);
+        firstResponse.EnsureSuccessStatusCode();
+
+        var mismatchResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/training/integrity/upgrade",
+            request);
+
+        Assert.Equal(HttpStatusCode.Conflict, mismatchResponse.StatusCode);
+
+        var json = await mismatchResponse.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"idempotency_key_conflict\"", json);
+    }
+
+    [Fact]
+    public async Task Training_RejectsCrossAccountAccess()
+    {
+        var ownerAuth = await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("TrainingOwner");
+        var intruderAuth = await RegisterAccountAsync(_client, CreateUniqueEmail("training-intruder"));
+        Authorize(_client, intruderAuth.AccessToken);
+
+        var response = await _client.GetAsync($"/api/v1/players/{player.PlayerId}/training");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.NotEqual(ownerAuth.AccountId, intruderAuth.AccountId);
@@ -731,6 +863,24 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
         await using var dbContext = new GameDbContext(options);
         var player = await dbContext.Players.SingleAsync(player => player.PlayerId == playerId);
         player.LastResourceClaimedAtUtc = lastResourceClaimedAtUtc;
+        await dbContext.SaveChangesAsync();
+    }
+
+    private async Task AddResourcesAsync(
+        Guid playerId,
+        long matter,
+        long energy,
+        long data)
+    {
+        var options = new DbContextOptionsBuilder<GameDbContext>()
+            .UseSqlite($"Data Source={_factory.DatabasePath}")
+            .Options;
+
+        await using var dbContext = new GameDbContext(options);
+        var player = await dbContext.Players.SingleAsync(player => player.PlayerId == playerId);
+        player.Matter += matter;
+        player.Energy += energy;
+        player.Data += data;
         await dbContext.SaveChangesAsync();
     }
 

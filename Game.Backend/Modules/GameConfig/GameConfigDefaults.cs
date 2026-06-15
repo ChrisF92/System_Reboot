@@ -11,6 +11,15 @@ public static class GameConfigDefaults
         OfflineProgress: new OfflineProgressConfig(
             EarlyOfflineCapSeconds: 7_200,
             BaseOfflineEfficiency: 0.50m),
+        Training: new TrainingConfig(
+        [
+            new TrainingStatDefinitionResponse("processing", "Processing", 10, 5, 2),
+            new TrainingStatDefinitionResponse("integrity", "Integrity", 12, 4, 0),
+            new TrainingStatDefinitionResponse("output", "Output", 8, 8, 1),
+            new TrainingStatDefinitionResponse("hardening", "Hardening", 15, 3, 0),
+            new TrainingStatDefinitionResponse("efficiency", "Efficiency", 8, 4, 4),
+            new TrainingStatDefinitionResponse("bandwidth", "Bandwidth", 5, 5, 5)
+        ]),
         Combat: new CombatConfig(
             EarlyLoadoutSlots: 3,
             NormalEncounterMinimumSeconds: 10,
