@@ -27,10 +27,11 @@ public sealed class CloudSaveService
     }
 
     public async Task<CloudSaveResponse> GetLatestAsync(
+        Guid accountId,
         Guid playerId,
         CancellationToken cancellationToken)
     {
-        await _playerService.EnsurePlayerExistsAsync(playerId, cancellationToken);
+        await _playerService.EnsurePlayerOwnedByAccountAsync(accountId, playerId, cancellationToken);
         var save = await _cloudSaveRepository.GetLatestAsync(playerId, cancellationToken);
         if (save is null)
         {
@@ -41,11 +42,12 @@ public sealed class CloudSaveService
     }
 
     public async Task<CloudSaveResponse> UpsertAsync(
+        Guid accountId,
         Guid playerId,
         UpsertCloudSaveRequest? request,
         CancellationToken cancellationToken)
     {
-        await _playerService.EnsurePlayerExistsAsync(playerId, cancellationToken);
+        await _playerService.EnsurePlayerOwnedByAccountAsync(accountId, playerId, cancellationToken);
         if (request is null)
         {
             throw new ValidationException("missing_cloud_save_request", "Cloud save request is required.");

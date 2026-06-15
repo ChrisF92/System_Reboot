@@ -1,8 +1,11 @@
+using Game.Backend.Modules.Auth;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Game.Backend.Modules.Players;
 
 [ApiController]
+[Authorize]
 [Route("api/v1/players")]
 public sealed class PlayersController : ControllerBase
 {
@@ -18,7 +21,8 @@ public sealed class PlayersController : ControllerBase
         CreatePlayerRequest? request,
         CancellationToken cancellationToken)
     {
-        var player = await _playerService.CreatePlayerAsync(request, cancellationToken);
+        var accountId = CurrentAccount.GetAccountId(User);
+        var player = await _playerService.CreatePlayerAsync(accountId, request, cancellationToken);
         return CreatedAtAction(nameof(GetPlayer), new { playerId = player.PlayerId }, player);
     }
 
@@ -27,6 +31,7 @@ public sealed class PlayersController : ControllerBase
         Guid playerId,
         CancellationToken cancellationToken)
     {
-        return await _playerService.GetPlayerAsync(playerId, cancellationToken);
+        var accountId = CurrentAccount.GetAccountId(User);
+        return await _playerService.GetPlayerAsync(accountId, playerId, cancellationToken);
     }
 }

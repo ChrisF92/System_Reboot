@@ -13,12 +13,62 @@ public sealed class GameDbContext : DbContext
 
     public DbSet<CloudSaveEntity> CloudSaves => Set<CloudSaveEntity>();
 
+    public DbSet<AccountEntity> Accounts => Set<AccountEntity>();
+
+    public DbSet<AccountSessionEntity> AccountSessions => Set<AccountSessionEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AccountEntity>(account =>
+        {
+            account.ToTable("Accounts");
+            account.HasKey(entity => entity.AccountId);
+            account.Property(entity => entity.Email)
+                .HasMaxLength(254)
+                .IsRequired();
+            account.Property(entity => entity.NormalizedEmail)
+                .HasMaxLength(254)
+                .IsRequired();
+            account.HasIndex(entity => entity.NormalizedEmail)
+                .IsUnique();
+            account.Property(entity => entity.PasswordHash)
+                .HasMaxLength(128)
+                .IsRequired();
+            account.Property(entity => entity.PasswordSalt)
+                .HasMaxLength(128)
+                .IsRequired();
+            account.Property(entity => entity.PasswordIterations)
+                .IsRequired();
+            account.Property(entity => entity.CreatedAtUtc)
+                .IsRequired();
+        });
+
+        modelBuilder.Entity<AccountSessionEntity>(session =>
+        {
+            session.ToTable("AccountSessions");
+            session.HasKey(entity => entity.SessionId);
+            session.Property(entity => entity.TokenHash)
+                .HasMaxLength(128)
+                .IsRequired();
+            session.HasIndex(entity => entity.TokenHash)
+                .IsUnique();
+            session.Property(entity => entity.CreatedAtUtc)
+                .IsRequired();
+            session.Property(entity => entity.ExpiresAtUtc)
+                .IsRequired();
+
+            session.HasOne(entity => entity.Account)
+                .WithMany()
+                .HasForeignKey(entity => entity.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<PlayerEntity>(player =>
         {
             player.ToTable("Players");
             player.HasKey(entity => entity.PlayerId);
+            player.Property(entity => entity.AccountId)
+                .IsRequired();
             player.Property(entity => entity.DisplayName)
                 .HasMaxLength(24)
                 .IsRequired();
@@ -38,6 +88,11 @@ public sealed class GameDbContext : DbContext
                 .IsRequired();
             player.Property(entity => entity.CreatedAtUtc)
                 .IsRequired();
+
+            player.HasOne(entity => entity.Account)
+                .WithMany()
+                .HasForeignKey(entity => entity.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<CloudSaveEntity>(cloudSave =>

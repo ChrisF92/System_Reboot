@@ -17,6 +17,7 @@ public sealed class PlayerService
     }
 
     public async Task<PlayerProfileResponse> CreatePlayerAsync(
+        Guid accountId,
         CreatePlayerRequest? request,
         CancellationToken cancellationToken)
     {
@@ -28,6 +29,7 @@ public sealed class PlayerService
         var displayName = ValidateDisplayName(request.DisplayName);
         var player = new Player(
             Guid.NewGuid(),
+            accountId,
             displayName,
             Level: 1,
             Xp: 0,
@@ -39,6 +41,7 @@ public sealed class PlayerService
     }
 
     public async Task<PlayerProfileResponse> GetPlayerAsync(
+        Guid accountId,
         Guid playerId,
         CancellationToken cancellationToken)
     {
@@ -48,15 +51,28 @@ public sealed class PlayerService
             throw new NotFoundException("player_not_found", "Player profile was not found.");
         }
 
+        if (player.AccountId != accountId)
+        {
+            throw new ForbiddenException("player_forbidden", "Player profile belongs to another account.");
+        }
+
         return ToResponse(player);
     }
 
-    public async Task EnsurePlayerExistsAsync(Guid playerId, CancellationToken cancellationToken)
+    public async Task EnsurePlayerOwnedByAccountAsync(
+        Guid accountId,
+        Guid playerId,
+        CancellationToken cancellationToken)
     {
         var player = await _playerRepository.GetByIdAsync(playerId, cancellationToken);
         if (player is null)
         {
             throw new NotFoundException("player_not_found", "Player profile was not found.");
+        }
+
+        if (player.AccountId != accountId)
+        {
+            throw new ForbiddenException("player_forbidden", "Player profile belongs to another account.");
         }
     }
 

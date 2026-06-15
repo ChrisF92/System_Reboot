@@ -1,6 +1,8 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Game.Backend.Modules.Auth;
 using Game.Backend.Modules.CloudSaves;
 using Game.Backend.Modules.GameConfig;
 using Game.Backend.Modules.Players;
@@ -19,6 +21,8 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
     [Fact]
     public async Task CreatePlayer_ReturnsUnityFriendlyProfileContract()
     {
+        await RegisterAndAuthorizeAsync(_client);
+
         var response = await _client.PostAsJsonAsync(
             "/api/v1/players",
             new CreatePlayerRequest(" RebootNode "));
@@ -43,6 +47,7 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
     [Fact]
     public async Task CloudSave_RoundTripsVersionedSaveJsonForExistingPlayer()
     {
+        await RegisterAndAuthorizeAsync(_client);
         var player = await CreatePlayerAsync("SaveNode");
         var request = new UpsertCloudSaveRequest(
             SaveVersion: 1,
@@ -78,20 +83,72 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
     }
 
     [Fact]
+    public async Task ProtectedEndpoint_ReturnsAuthenticationError_WhenBearerTokenIsMissing()
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/api/v1/players",
+            new CreatePlayerRequest("NoTokenNode"));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"authentication_required\"", json);
+    }
+
+    [Fact]
+    public async Task PlayerEndpoints_RejectCrossAccountAccess()
+    {
+        var firstAuth = await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("OwnerNode");
+        var secondAuth = await RegisterAccountAsync(_client, CreateUniqueEmail("intruder"));
+        Authorize(_client, secondAuth.AccessToken);
+
+        var response = await _client.GetAsync($"/api/v1/players/{player.PlayerId}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"player_forbidden\"", json);
+        Assert.NotEqual(firstAuth.AccountId, secondAuth.AccountId);
+    }
+
+    [Fact]
+    public async Task Auth_Login_ReturnsNewBearerSessionForExistingAccount()
+    {
+        var email = CreateUniqueEmail("login");
+        await RegisterAccountAsync(_client, email);
+
+        var response = await _client.PostAsJsonAsync(
+            "/api/v1/auth/login",
+            new LoginRequest(email, "CorrectHorseBattery1"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var auth = await response.Content.ReadFromJsonAsync<AuthResponse>(JsonOptions.Default);
+        Assert.NotNull(auth);
+        Assert.NotEqual(Guid.Empty, auth.AccountId);
+        Assert.False(string.IsNullOrWhiteSpace(auth.AccessToken));
+        Assert.True(auth.ExpiresAtUtc > DateTimeOffset.UtcNow);
+    }
+
+    [Fact]
     public async Task CloudSave_PersistsAcrossRestartedBackendHost()
     {
         var databasePath = Path.Combine(
             Path.GetTempPath(),
             $"system-reboot-restart-{Guid.NewGuid():N}.db");
         Guid playerId;
+        string accessToken;
 
         using (var firstFactory = TestBackendFactory.CreateWithDatabasePath(
             databasePath,
             deleteDatabaseOnDispose: false))
         {
             var firstClient = firstFactory.CreateClient();
+            var auth = await RegisterAndAuthorizeAsync(firstClient);
             var player = await CreatePlayerAsync(firstClient, "DurableNode");
             playerId = player.PlayerId;
+            accessToken = auth.AccessToken;
             var request = new UpsertCloudSaveRequest(
                 SaveVersion: 2,
                 SaveJson: """
@@ -117,6 +174,7 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
             deleteDatabaseOnDispose: true))
         {
             var secondClient = secondFactory.CreateClient();
+            Authorize(secondClient, accessToken);
             var latestSave = await secondClient.GetFromJsonAsync<CloudSaveResponse>(
                 $"/api/v1/cloud-saves/{playerId}",
                 JsonOptions.Default);
@@ -131,6 +189,7 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
     [Fact]
     public async Task CloudSave_RejectsInvalidJsonWithConsistentErrorEnvelope()
     {
+        await RegisterAndAuthorizeAsync(_client);
         var player = await CreatePlayerAsync("GuardNode");
         var request = new UpsertCloudSaveRequest(
             SaveVersion: 1,
@@ -181,6 +240,38 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
         var player = await response.Content.ReadFromJsonAsync<PlayerProfileResponse>(JsonOptions.Default);
         Assert.NotNull(player);
         return player;
+    }
+
+    private static async Task<AuthResponse> RegisterAndAuthorizeAsync(HttpClient client)
+    {
+        var auth = await RegisterAccountAsync(client, CreateUniqueEmail("account"));
+        Authorize(client, auth.AccessToken);
+        return auth;
+    }
+
+    private static async Task<AuthResponse> RegisterAccountAsync(HttpClient client, string email)
+    {
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/auth/register",
+            new RegisterAccountRequest(email, "CorrectHorseBattery1"));
+
+        response.EnsureSuccessStatusCode();
+
+        var auth = await response.Content.ReadFromJsonAsync<AuthResponse>(JsonOptions.Default);
+        Assert.NotNull(auth);
+        Assert.NotEqual(Guid.Empty, auth.AccountId);
+        Assert.False(string.IsNullOrWhiteSpace(auth.AccessToken));
+        return auth;
+    }
+
+    private static void Authorize(HttpClient client, string accessToken)
+    {
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+    }
+
+    private static string CreateUniqueEmail(string prefix)
+    {
+        return $"{prefix}-{Guid.NewGuid():N}@example.test";
     }
 
     private static class JsonOptions

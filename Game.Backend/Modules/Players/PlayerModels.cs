@@ -2,6 +2,7 @@ namespace Game.Backend.Modules.Players;
 
 public sealed record Player(
     Guid PlayerId,
+    Guid AccountId,
     string DisplayName,
     int Level,
     long Xp,

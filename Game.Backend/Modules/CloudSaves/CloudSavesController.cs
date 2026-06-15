@@ -1,8 +1,11 @@
+using Game.Backend.Modules.Auth;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Game.Backend.Modules.CloudSaves;
 
 [ApiController]
+[Authorize]
 [Route("api/v1/cloud-saves")]
 public sealed class CloudSavesController : ControllerBase
 {
@@ -18,7 +21,8 @@ public sealed class CloudSavesController : ControllerBase
         Guid playerId,
         CancellationToken cancellationToken)
     {
-        return await _cloudSaveService.GetLatestAsync(playerId, cancellationToken);
+        var accountId = CurrentAccount.GetAccountId(User);
+        return await _cloudSaveService.GetLatestAsync(accountId, playerId, cancellationToken);
     }
 
     [HttpPut("{playerId:guid}")]
@@ -27,6 +31,7 @@ public sealed class CloudSavesController : ControllerBase
         UpsertCloudSaveRequest? request,
         CancellationToken cancellationToken)
     {
-        return await _cloudSaveService.UpsertAsync(playerId, request, cancellationToken);
+        var accountId = CurrentAccount.GetAccountId(User);
+        return await _cloudSaveService.UpsertAsync(accountId, playerId, request, cancellationToken);
     }
 }

@@ -22,6 +22,22 @@ public sealed class NotFoundException : AppException
     }
 }
 
+public sealed class ForbiddenException : AppException
+{
+    public ForbiddenException(string code, string message)
+        : base(code, message, StatusCodes.Status403Forbidden)
+    {
+    }
+}
+
+public sealed class ConflictException : AppException
+{
+    public ConflictException(string code, string message)
+        : base(code, message, StatusCodes.Status409Conflict)
+    {
+    }
+}
+
 public sealed class ValidationException : AppException
 {
     public ValidationException(string code, string message)

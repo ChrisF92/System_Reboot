@@ -1,12 +1,34 @@
 @Game.Backend_HostAddress = http://localhost:5222
+@AccessToken = replace-with-register-or-login-token
 
 GET {{Game.Backend_HostAddress}}/api/v1/game-config
 Accept: application/json
 
 ###
 
+POST {{Game.Backend_HostAddress}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "player@example.test",
+  "password": "CorrectHorseBattery1"
+}
+
+###
+
+POST {{Game.Backend_HostAddress}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "player@example.test",
+  "password": "CorrectHorseBattery1"
+}
+
+###
+
 POST {{Game.Backend_HostAddress}}/api/v1/players
 Content-Type: application/json
+Authorization: Bearer {{AccessToken}}
 
 {
   "displayName": "RebootNode"
@@ -16,6 +38,7 @@ Content-Type: application/json
 
 PUT {{Game.Backend_HostAddress}}/api/v1/cloud-saves/00000000-0000-0000-0000-000000000000
 Content-Type: application/json
+Authorization: Bearer {{AccessToken}}
 
 {
   "saveVersion": 1,

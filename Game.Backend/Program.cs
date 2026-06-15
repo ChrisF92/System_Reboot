@@ -1,9 +1,11 @@
 using System.Text.Json;
 using Game.Backend.Database;
 using Game.Backend.Middleware;
+using Game.Backend.Modules.Auth;
 using Game.Backend.Modules.CloudSaves;
 using Game.Backend.Modules.GameConfig;
 using Game.Backend.Modules.Players;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,7 +22,16 @@ builder.Services.AddDbContext<GameDbContext>(options =>
 
     options.UseSqlite(connectionString);
 });
+builder.Services.AddAuthentication(BearerSessionAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, BearerSessionAuthenticationHandler>(
+        BearerSessionAuthenticationHandler.SchemeName,
+        _ => { });
+builder.Services.AddAuthorization();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<AuthRepository>();
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddSingleton<PasswordHasher>();
+builder.Services.AddSingleton<TokenHasher>();
 builder.Services.AddScoped<PlayerRepository>();
 builder.Services.AddScoped<PlayerService>();
 builder.Services.AddScoped<CloudSaveRepository>();
@@ -37,6 +48,7 @@ using (var scope = app.Services.CreateScope())
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

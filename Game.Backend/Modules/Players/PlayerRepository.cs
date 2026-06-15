@@ -33,6 +33,7 @@ public sealed class PlayerRepository
         return new PlayerEntity
         {
             PlayerId = player.PlayerId,
+            AccountId = player.AccountId,
             DisplayName = player.DisplayName,
             Level = player.Level,
             Xp = player.Xp,
@@ -49,6 +50,7 @@ public sealed class PlayerRepository
     {
         return new Player(
             entity.PlayerId,
+            entity.AccountId,
             entity.DisplayName,
             entity.Level,
             entity.Xp,
