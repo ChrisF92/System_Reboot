@@ -17,6 +17,10 @@ public sealed class GameDbContext : DbContext
 
     public DbSet<AccountSessionEntity> AccountSessions => Set<AccountSessionEntity>();
 
+    public DbSet<PurchaseReceiptEntity> PurchaseReceipts => Set<PurchaseReceiptEntity>();
+
+    public DbSet<EntitlementEntity> Entitlements => Set<EntitlementEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<AccountEntity>(account =>
@@ -116,6 +120,59 @@ public sealed class GameDbContext : DbContext
                 .WithOne()
                 .HasForeignKey<CloudSaveEntity>(entity => entity.PlayerId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PurchaseReceiptEntity>(purchaseReceipt =>
+        {
+            purchaseReceipt.ToTable("PurchaseReceipts");
+            purchaseReceipt.HasKey(entity => entity.PurchaseReceiptId);
+            purchaseReceipt.Property(entity => entity.Store)
+                .HasMaxLength(32)
+                .IsRequired();
+            purchaseReceipt.Property(entity => entity.ProductId)
+                .HasMaxLength(64)
+                .IsRequired();
+            purchaseReceipt.Property(entity => entity.TransactionId)
+                .HasMaxLength(128)
+                .IsRequired();
+            purchaseReceipt.Property(entity => entity.ReceiptHash)
+                .HasMaxLength(128)
+                .IsRequired();
+            purchaseReceipt.HasIndex(entity => entity.ReceiptHash)
+                .IsUnique();
+            purchaseReceipt.Property(entity => entity.ValidatedAtUtc)
+                .IsRequired();
+
+            purchaseReceipt.HasOne(entity => entity.Account)
+                .WithMany()
+                .HasForeignKey(entity => entity.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+            purchaseReceipt.HasOne(entity => entity.Player)
+                .WithMany()
+                .HasForeignKey(entity => entity.PlayerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EntitlementEntity>(entitlement =>
+        {
+            entitlement.ToTable("Entitlements");
+            entitlement.HasKey(entity => entity.EntitlementId);
+            entitlement.Property(entity => entity.ProductId)
+                .HasMaxLength(64)
+                .IsRequired();
+            entitlement.Property(entity => entity.GrantedAtUtc)
+                .IsRequired();
+            entitlement.HasIndex(entity => new { entity.AccountId, entity.ProductId })
+                .IsUnique();
+
+            entitlement.HasOne(entity => entity.Account)
+                .WithMany()
+                .HasForeignKey(entity => entity.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entitlement.HasOne(entity => entity.SourcePurchaseReceipt)
+                .WithMany()
+                .HasForeignKey(entity => entity.SourcePurchaseReceiptId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

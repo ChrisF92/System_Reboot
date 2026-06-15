@@ -9,6 +9,7 @@ This backend starts from the priorities in `system_reboot_gdd.md` and `cursor_cs
 - `GameConfig` exposes safe, read-only balance/config values needed by Unity.
 - `Auth` owns account registration, login, and bearer sessions.
 - `Resources` owns server-authoritative Matter, Energy, Data balances and offline claims.
+- `Purchases` owns receipt validation and non-power entitlement grants.
 
 ## Current storage
 
@@ -24,10 +25,11 @@ Repositories use EF Core with SQLite. The default local database is `system-rebo
 - Player and cloud-save routes require bearer authentication.
 - Player and cloud-save access is limited to the owning account.
 - Resource balances and offline claims are calculated by the backend, not accepted from cloud-save JSON.
+- Purchases require an owned player, validated receipt, and non-power product id.
 
 ## Next backend steps
 
-1. Add purchase validation before accepting premium-currency or store-related state.
+1. Replace the local mock purchase validator with real Android purchase validation.
 2. Add request idempotency for high-risk reward, purchase, and currency actions.
 3. Add rate limits for auth, save, resource, and purchase endpoints.
 4. Move additional progression state out of opaque cloud-save JSON as gameplay systems come online.

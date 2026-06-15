@@ -7,6 +7,7 @@ using Game.Backend.Modules.Auth;
 using Game.Backend.Modules.CloudSaves;
 using Game.Backend.Modules.GameConfig;
 using Game.Backend.Modules.Players;
+using Game.Backend.Modules.Purchases;
 using Game.Backend.Modules.Resources;
 using Microsoft.EntityFrameworkCore;
 
@@ -171,6 +172,108 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
         Authorize(_client, intruderAuth.AccessToken);
 
         var response = await _client.GetAsync($"/api/v1/players/{player.PlayerId}/resources");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.NotEqual(ownerAuth.AccountId, intruderAuth.AccountId);
+
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"player_forbidden\"", json);
+    }
+
+    [Fact]
+    public async Task Purchases_ValidateSafeProduct_GrantsEntitlement()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("PurchaseNode");
+        var request = CreatePurchaseRequest(
+            player.PlayerId,
+            "cosmetic_avatar_skin_neon",
+            "tx-safe-001");
+
+        var response = await _client.PostAsJsonAsync("/api/v1/purchases/validate", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var purchase = await response.Content.ReadFromJsonAsync<ValidatePurchaseResponse>(JsonOptions.Default);
+        Assert.NotNull(purchase);
+        Assert.Equal(player.PlayerId, purchase.PlayerId);
+        Assert.Equal("local_mock", purchase.Store);
+        Assert.Equal("cosmetic_avatar_skin_neon", purchase.ProductId);
+        Assert.Equal("cosmetic", purchase.ProductType);
+        Assert.NotEqual(Guid.Empty, purchase.PurchaseReceiptId);
+        Assert.NotEqual(Guid.Empty, purchase.EntitlementId);
+    }
+
+    [Fact]
+    public async Task Purchases_RejectDuplicateReceipt()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("DuplicatePurchase");
+        var request = CreatePurchaseRequest(
+            player.PlayerId,
+            "ui_theme_static",
+            "tx-duplicate-001");
+
+        var firstResponse = await _client.PostAsJsonAsync("/api/v1/purchases/validate", request);
+        firstResponse.EnsureSuccessStatusCode();
+
+        var duplicateResponse = await _client.PostAsJsonAsync("/api/v1/purchases/validate", request);
+
+        Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
+
+        var json = await duplicateResponse.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"duplicate_receipt\"", json);
+    }
+
+    [Fact]
+    public async Task Purchases_RejectUnknownProduct()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("UnknownProduct");
+        var request = CreatePurchaseRequest(
+            player.PlayerId,
+            "unknown_product",
+            "tx-unknown-001");
+
+        var response = await _client.PostAsJsonAsync("/api/v1/purchases/validate", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"unknown_product\"", json);
+    }
+
+    [Fact]
+    public async Task Purchases_RejectPowerAffectingProduct()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("PowerProduct");
+        var request = CreatePurchaseRequest(
+            player.PlayerId,
+            "combat_stat_boost",
+            "tx-power-001");
+
+        var response = await _client.PostAsJsonAsync("/api/v1/purchases/validate", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"power_product_not_allowed\"", json);
+    }
+
+    [Fact]
+    public async Task Purchases_RejectCrossAccountPlayer()
+    {
+        var ownerAuth = await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("PurchaseOwner");
+        var intruderAuth = await RegisterAccountAsync(_client, CreateUniqueEmail("purchase-intruder"));
+        Authorize(_client, intruderAuth.AccessToken);
+        var request = CreatePurchaseRequest(
+            player.PlayerId,
+            "profile_frame_founder",
+            "tx-cross-account-001");
+
+        var response = await _client.PostAsJsonAsync("/api/v1/purchases/validate", request);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.NotEqual(ownerAuth.AccountId, intruderAuth.AccountId);
@@ -422,6 +525,18 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
     private static string CreateUniqueEmail(string prefix)
     {
         return $"{prefix}-{Guid.NewGuid():N}@example.test";
+    }
+
+    private static ValidatePurchaseRequest CreatePurchaseRequest(
+        Guid playerId,
+        string productId,
+        string transactionId)
+    {
+        return new ValidatePurchaseRequest(
+            playerId,
+            "local_mock",
+            productId,
+            $"local:{productId}:{transactionId}");
     }
 
     private async Task SetLastResourceClaimedAtUtcAsync(
