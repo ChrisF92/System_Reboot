@@ -1,0 +1,27 @@
+@Game.Backend_HostAddress = http://localhost:5222
+
+GET {{Game.Backend_HostAddress}}/api/v1/game-config
+Accept: application/json
+
+###
+
+POST {{Game.Backend_HostAddress}}/api/v1/players
+Content-Type: application/json
+
+{
+  "displayName": "RebootNode"
+}
+
+###
+
+PUT {{Game.Backend_HostAddress}}/api/v1/cloud-saves/00000000-0000-0000-0000-000000000000
+Content-Type: application/json
+
+{
+  "saveVersion": 1,
+  "saveJson": "{\"version\":1,\"resources\":{\"matter\":25,\"energy\":10,\"data\":3}}",
+  "checksum": "replace-with-client-checksum",
+  "clientSavedAtUtc": "2026-06-15T16:00:00Z"
+}
+
+###
