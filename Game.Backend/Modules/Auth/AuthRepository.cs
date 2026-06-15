@@ -46,11 +46,14 @@ public sealed class AuthRepository
     {
         var entity = await _dbContext.AccountSessions
             .AsNoTracking()
-            .SingleOrDefaultAsync(
-                session => session.TokenHash == tokenHash && session.ExpiresAtUtc > now,
-                cancellationToken);
+            .SingleOrDefaultAsync(session => session.TokenHash == tokenHash, cancellationToken);
 
-        return entity is null ? null : ToDomain(entity);
+        if (entity is null || entity.ExpiresAtUtc <= now)
+        {
+            return null;
+        }
+
+        return ToDomain(entity);
     }
 
     private static AccountEntity ToEntity(Account account)
