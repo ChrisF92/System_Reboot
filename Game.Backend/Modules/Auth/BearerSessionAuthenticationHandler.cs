@@ -36,16 +36,17 @@ public sealed class BearerSessionAuthenticationHandler : AuthenticationHandler<A
         }
 
         var accessToken = authorizationHeader["Bearer ".Length..].Trim();
-        var accountId = await _authService.GetAccountIdForTokenAsync(accessToken, Context.RequestAborted);
-        if (accountId is null)
+        var session = await _authService.GetSessionForTokenAsync(accessToken, Context.RequestAborted);
+        if (session is null)
         {
             return AuthenticateResult.Fail("Bearer token is invalid or expired.");
         }
 
         var claims = new[]
         {
-            new Claim(ClaimTypes.NameIdentifier, accountId.Value.ToString()),
-            new Claim("account_id", accountId.Value.ToString())
+            new Claim(ClaimTypes.NameIdentifier, session.AccountId.ToString()),
+            new Claim("account_id", session.AccountId.ToString()),
+            new Claim("session_id", session.SessionId.ToString())
         };
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);

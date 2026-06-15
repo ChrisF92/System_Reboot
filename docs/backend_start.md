@@ -25,7 +25,7 @@ Repositories use EF Core with SQLite. The default local database is `system-rebo
 
 ## Next backend steps
 
-1. Add logout/session revocation and token rotation.
-2. Replace opaque save snapshots with module-owned server state where backend authority is required.
-3. Add purchase validation before accepting premium-currency or store-related state.
-4. Add request idempotency for high-risk reward, purchase, and currency actions.
+1. Replace opaque save snapshots with module-owned server state where backend authority is required.
+2. Add purchase validation before accepting premium-currency or store-related state.
+3. Add request idempotency for high-risk reward, purchase, and currency actions.
+4. Add rate limits for auth, save, and purchase endpoints.

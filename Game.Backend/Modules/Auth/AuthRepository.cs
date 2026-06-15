@@ -48,12 +48,32 @@ public sealed class AuthRepository
             .AsNoTracking()
             .SingleOrDefaultAsync(session => session.TokenHash == tokenHash, cancellationToken);
 
-        if (entity is null || entity.ExpiresAtUtc <= now)
+        if (entity is null || entity.ExpiresAtUtc <= now || entity.RevokedAtUtc is not null)
         {
             return null;
         }
 
         return ToDomain(entity);
+    }
+
+    public async Task RevokeSessionAsync(
+        Guid sessionId,
+        Guid accountId,
+        DateTimeOffset revokedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        var entity = await _dbContext.AccountSessions
+            .SingleOrDefaultAsync(
+                session => session.SessionId == sessionId && session.AccountId == accountId,
+                cancellationToken);
+
+        if (entity is null || entity.RevokedAtUtc is not null)
+        {
+            return;
+        }
+
+        entity.RevokedAtUtc = revokedAtUtc;
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private static AccountEntity ToEntity(Account account)
@@ -90,7 +110,8 @@ public sealed class AuthRepository
             AccountId = session.AccountId,
             TokenHash = session.TokenHash,
             CreatedAtUtc = session.CreatedAtUtc,
-            ExpiresAtUtc = session.ExpiresAtUtc
+            ExpiresAtUtc = session.ExpiresAtUtc,
+            RevokedAtUtc = session.RevokedAtUtc
         };
     }
 
@@ -101,6 +122,7 @@ public sealed class AuthRepository
             entity.AccountId,
             entity.TokenHash,
             entity.CreatedAtUtc,
-            entity.ExpiresAtUtc);
+            entity.ExpiresAtUtc,
+            entity.RevokedAtUtc);
     }
 }

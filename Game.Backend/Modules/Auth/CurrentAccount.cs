@@ -14,4 +14,15 @@ public static class CurrentAccount
 
         return accountId;
     }
+
+    public static Guid GetSessionId(ClaimsPrincipal user)
+    {
+        var sessionIdValue = user.FindFirstValue("session_id");
+        if (!Guid.TryParse(sessionIdValue, out var sessionId))
+        {
+            throw new InvalidOperationException("Authenticated request is missing a session id claim.");
+        }
+
+        return sessionId;
+    }
 }

@@ -132,6 +132,59 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
     }
 
     [Fact]
+    public async Task Auth_Logout_RevokesCurrentBearerSession()
+    {
+        var auth = await RegisterAndAuthorizeAsync(_client);
+
+        var logoutResponse = await _client.PostAsync("/api/v1/auth/logout", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, logoutResponse.StatusCode);
+
+        var logout = await logoutResponse.Content.ReadFromJsonAsync<LogoutResponse>(JsonOptions.Default);
+        Assert.NotNull(logout);
+        Assert.True(logout.RevokedAtUtc <= DateTimeOffset.UtcNow.AddSeconds(5));
+
+        Authorize(_client, auth.AccessToken);
+        var protectedResponse = await _client.PostAsJsonAsync(
+            "/api/v1/players",
+            new CreatePlayerRequest("RevokedNode"));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, protectedResponse.StatusCode);
+
+        var json = await protectedResponse.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"authentication_required\"", json);
+    }
+
+    [Fact]
+    public async Task Auth_Refresh_RotatesBearerSessionAndRejectsOldToken()
+    {
+        var originalAuth = await RegisterAndAuthorizeAsync(_client);
+
+        var refreshResponse = await _client.PostAsync("/api/v1/auth/refresh", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, refreshResponse.StatusCode);
+
+        var refreshedAuth = await refreshResponse.Content.ReadFromJsonAsync<AuthResponse>(JsonOptions.Default);
+        Assert.NotNull(refreshedAuth);
+        Assert.Equal(originalAuth.AccountId, refreshedAuth.AccountId);
+        Assert.NotEqual(originalAuth.AccessToken, refreshedAuth.AccessToken);
+
+        Authorize(_client, originalAuth.AccessToken);
+        var oldTokenResponse = await _client.PostAsJsonAsync(
+            "/api/v1/players",
+            new CreatePlayerRequest("OldTokenNode"));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, oldTokenResponse.StatusCode);
+
+        Authorize(_client, refreshedAuth.AccessToken);
+        var newTokenResponse = await _client.PostAsJsonAsync(
+            "/api/v1/players",
+            new CreatePlayerRequest("NewTokenNode"));
+
+        Assert.Equal(HttpStatusCode.Created, newTokenResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task CloudSave_PersistsAcrossRestartedBackendHost()
     {
         var databasePath = Path.Combine(

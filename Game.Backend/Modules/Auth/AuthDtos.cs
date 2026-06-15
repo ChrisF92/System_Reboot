@@ -8,3 +8,5 @@ public sealed record AuthResponse(
     Guid AccountId,
     string AccessToken,
     DateTimeOffset ExpiresAtUtc);
+
+public sealed record LogoutResponse(DateTimeOffset RevokedAtUtc);

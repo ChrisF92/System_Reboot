@@ -86,7 +86,7 @@ public sealed class AuthService
         return await CreateSessionResponseAsync(account.AccountId, cancellationToken);
     }
 
-    public async Task<Guid?> GetAccountIdForTokenAsync(
+    public async Task<AccountSession?> GetSessionForTokenAsync(
         string accessToken,
         CancellationToken cancellationToken)
     {
@@ -101,7 +101,36 @@ public sealed class AuthService
             _timeProvider.GetUtcNow(),
             cancellationToken);
 
-        return session?.AccountId;
+        return session;
+    }
+
+    public async Task<LogoutResponse> LogoutAsync(
+        Guid accountId,
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        var revokedAtUtc = _timeProvider.GetUtcNow();
+        await _authRepository.RevokeSessionAsync(
+            sessionId,
+            accountId,
+            revokedAtUtc,
+            cancellationToken);
+
+        return new LogoutResponse(revokedAtUtc);
+    }
+
+    public async Task<AuthResponse> RefreshAsync(
+        Guid accountId,
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        await _authRepository.RevokeSessionAsync(
+            sessionId,
+            accountId,
+            _timeProvider.GetUtcNow(),
+            cancellationToken);
+
+        return await CreateSessionResponseAsync(accountId, cancellationToken);
     }
 
     private async Task<AuthResponse> CreateSessionResponseAsync(
@@ -115,7 +144,8 @@ public sealed class AuthService
             accountId,
             _tokenHasher.HashToken(accessToken),
             now,
-            now.Add(SessionDuration));
+            now.Add(SessionDuration),
+            RevokedAtUtc: null);
 
         await _authRepository.AddSessionAsync(session, cancellationToken);
         return new AuthResponse(accountId, accessToken, session.ExpiresAtUtc);

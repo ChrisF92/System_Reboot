@@ -12,5 +12,7 @@ public sealed class AccountSessionEntity
 
     public DateTimeOffset ExpiresAtUtc { get; set; }
 
+    public DateTimeOffset? RevokedAtUtc { get; set; }
+
     public AccountEntity? Account { get; set; }
 }

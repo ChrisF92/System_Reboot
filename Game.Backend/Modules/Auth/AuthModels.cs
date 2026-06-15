@@ -14,4 +14,5 @@ public sealed record AccountSession(
     Guid AccountId,
     string TokenHash,
     DateTimeOffset CreatedAtUtc,
-    DateTimeOffset ExpiresAtUtc);
+    DateTimeOffset ExpiresAtUtc,
+    DateTimeOffset? RevokedAtUtc);

@@ -56,6 +56,7 @@ public sealed class GameDbContext : DbContext
                 .IsRequired();
             session.Property(entity => entity.ExpiresAtUtc)
                 .IsRequired();
+            session.Property(entity => entity.RevokedAtUtc);
 
             session.HasOne(entity => entity.Account)
                 .WithMany()
