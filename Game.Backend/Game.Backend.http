@@ -1,0 +1,119 @@
+@Game.Backend_HostAddress = http://localhost:5222
+@AccessToken = replace-with-register-or-login-token
+
+GET {{Game.Backend_HostAddress}}/api/v1/game-config
+Accept: application/json
+
+###
+
+POST {{Game.Backend_HostAddress}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "player@example.test",
+  "password": "CorrectHorseBattery1"
+}
+
+###
+
+POST {{Game.Backend_HostAddress}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "player@example.test",
+  "password": "CorrectHorseBattery1"
+}
+
+###
+
+POST {{Game.Backend_HostAddress}}/api/v1/players
+Content-Type: application/json
+Authorization: Bearer {{AccessToken}}
+
+{
+  "displayName": "RebootNode"
+}
+
+###
+
+POST {{Game.Backend_HostAddress}}/api/v1/auth/refresh
+Authorization: Bearer {{AccessToken}}
+
+###
+
+POST {{Game.Backend_HostAddress}}/api/v1/auth/logout
+Authorization: Bearer {{AccessToken}}
+
+###
+
+GET {{Game.Backend_HostAddress}}/api/v1/players/00000000-0000-0000-0000-000000000000/resources
+Authorization: Bearer {{AccessToken}}
+
+###
+
+POST {{Game.Backend_HostAddress}}/api/v1/players/00000000-0000-0000-0000-000000000000/resources/claim-offline
+Content-Type: application/json
+Authorization: Bearer {{AccessToken}}
+
+{
+  "requestId": "claim-offline-request-001"
+}
+
+###
+
+GET {{Game.Backend_HostAddress}}/api/v1/players/00000000-0000-0000-0000-000000000000/training
+Authorization: Bearer {{AccessToken}}
+
+###
+
+POST {{Game.Backend_HostAddress}}/api/v1/players/00000000-0000-0000-0000-000000000000/training/processing/upgrade
+Content-Type: application/json
+Authorization: Bearer {{AccessToken}}
+
+{
+  "requestId": "training-processing-request-001"
+}
+
+###
+
+GET {{Game.Backend_HostAddress}}/api/v1/players/00000000-0000-0000-0000-000000000000/upgrades
+Authorization: Bearer {{AccessToken}}
+
+###
+
+POST {{Game.Backend_HostAddress}}/api/v1/players/00000000-0000-0000-0000-000000000000/upgrades/matter_harvester/purchase
+Content-Type: application/json
+Authorization: Bearer {{AccessToken}}
+
+{
+  "requestId": "upgrade-matter-harvester-request-001"
+}
+
+###
+
+POST {{Game.Backend_HostAddress}}/api/v1/purchases/validate
+Content-Type: application/json
+Authorization: Bearer {{AccessToken}}
+
+{
+  "requestId": "purchase-request-001",
+  "playerId": "00000000-0000-0000-0000-000000000000",
+  "store": "local_mock",
+  "productId": "cosmetic_avatar_skin_neon",
+  "receipt": "local:cosmetic_avatar_skin_neon:transaction-001"
+}
+
+###
+
+PUT {{Game.Backend_HostAddress}}/api/v1/cloud-saves/00000000-0000-0000-0000-000000000000
+Content-Type: application/json
+Authorization: Bearer {{AccessToken}}
+
+{
+  "saveVersion": 1,
+  "saveJson": "{\"version\":1,\"resources\":{\"matter\":25,\"energy\":10,\"data\":3}}",
+  "checksum": "replace-with-client-checksum",
+  "clientSavedAtUtc": "2026-06-15T16:00:00Z"
+}
+
+###
