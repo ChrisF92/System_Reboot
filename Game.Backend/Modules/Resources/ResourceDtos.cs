@@ -2,6 +2,8 @@ using Game.Backend.Modules.Players;
 
 namespace Game.Backend.Modules.Resources;
 
+public sealed record ClaimOfflineResourcesRequest(string? RequestId);
+
 public sealed record PlayerResourcesResponse(
     Guid PlayerId,
     ResourceWalletResponse Resources,

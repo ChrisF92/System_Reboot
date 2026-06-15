@@ -1,3 +1,4 @@
+using Game.Backend.Modules.Idempotency;
 using Game.Backend.Modules.Players;
 using Game.Backend.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,7 @@ public sealed class PurchaseService
     private readonly PurchaseProductCatalog _productCatalog;
     private readonly MockPurchaseReceiptValidator _receiptValidator;
     private readonly PlayerService _playerService;
+    private readonly IdempotencyService _idempotencyService;
     private readonly TimeProvider _timeProvider;
 
     public PurchaseService(
@@ -21,12 +23,14 @@ public sealed class PurchaseService
         PurchaseProductCatalog productCatalog,
         MockPurchaseReceiptValidator receiptValidator,
         PlayerService playerService,
+        IdempotencyService idempotencyService,
         TimeProvider timeProvider)
     {
         _purchaseRepository = purchaseRepository;
         _productCatalog = productCatalog;
         _receiptValidator = receiptValidator;
         _playerService = playerService;
+        _idempotencyService = idempotencyService;
         _timeProvider = timeProvider;
     }
 
@@ -40,6 +44,7 @@ public sealed class PurchaseService
             throw new ValidationException("missing_purchase_request", "Purchase validation request is required.");
         }
 
+        var requestId = _idempotencyService.ValidateRequestId(request.RequestId);
         await _playerService.EnsurePlayerOwnedByAccountAsync(
             accountId,
             request.PlayerId,
@@ -71,6 +76,24 @@ public sealed class PurchaseService
         }
 
         var validatedReceipt = _receiptValidator.Validate(store, productId, receipt);
+        var requestHash = _idempotencyService.HashPayload(new
+        {
+            request.PlayerId,
+            store,
+            productId,
+            receiptHash = validatedReceipt.ReceiptHash
+        });
+        var replay = await _idempotencyService.GetReplayAsync<ValidatePurchaseResponse>(
+            accountId,
+            "purchases.validate",
+            requestId,
+            requestHash,
+            cancellationToken);
+        if (replay is not null)
+        {
+            return replay;
+        }
+
         if (await _purchaseRepository.ReceiptExistsAsync(validatedReceipt.ReceiptHash, cancellationToken))
         {
             throw new ConflictException("duplicate_receipt", "Receipt has already been validated.");
@@ -100,7 +123,7 @@ public sealed class PurchaseService
                 entitlement,
                 cancellationToken);
 
-            return new ValidatePurchaseResponse(
+            var response = new ValidatePurchaseResponse(
                 storedPurchase.Receipt.PurchaseReceiptId,
                 storedPurchase.Entitlement.EntitlementId,
                 accountId,
@@ -110,6 +133,17 @@ public sealed class PurchaseService
                 product.ProductType,
                 storedPurchase.Receipt.ValidatedAtUtc,
                 storedPurchase.Entitlement.GrantedAtUtc);
+
+            await _idempotencyService.StoreResponseAsync(
+                accountId,
+                request.PlayerId,
+                "purchases.validate",
+                requestId,
+                requestHash,
+                response,
+                cancellationToken);
+
+            return response;
         }
         catch (DbUpdateException)
         {

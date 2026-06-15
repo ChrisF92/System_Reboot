@@ -4,6 +4,7 @@ using Game.Backend.Middleware;
 using Game.Backend.Modules.Auth;
 using Game.Backend.Modules.CloudSaves;
 using Game.Backend.Modules.GameConfig;
+using Game.Backend.Modules.Idempotency;
 using Game.Backend.Modules.Players;
 using Game.Backend.Modules.Purchases;
 using Game.Backend.Modules.Resources;
@@ -44,6 +45,8 @@ builder.Services.AddScoped<PurchaseRepository>();
 builder.Services.AddScoped<PurchaseService>();
 builder.Services.AddSingleton<PurchaseProductCatalog>();
 builder.Services.AddSingleton<MockPurchaseReceiptValidator>();
+builder.Services.AddScoped<IdempotencyRepository>();
+builder.Services.AddScoped<IdempotencyService>();
 builder.Services.AddSingleton<GameConfigService>();
 
 var app = builder.Build();

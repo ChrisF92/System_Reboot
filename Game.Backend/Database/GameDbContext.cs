@@ -21,6 +21,8 @@ public sealed class GameDbContext : DbContext
 
     public DbSet<EntitlementEntity> Entitlements => Set<EntitlementEntity>();
 
+    public DbSet<IdempotencyKeyEntity> IdempotencyKeys => Set<IdempotencyKeyEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<AccountEntity>(account =>
@@ -173,6 +175,37 @@ public sealed class GameDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(entity => entity.SourcePurchaseReceiptId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<IdempotencyKeyEntity>(idempotencyKey =>
+        {
+            idempotencyKey.ToTable("IdempotencyKeys");
+            idempotencyKey.HasKey(entity => entity.IdempotencyKeyId);
+            idempotencyKey.Property(entity => entity.Action)
+                .HasMaxLength(64)
+                .IsRequired();
+            idempotencyKey.Property(entity => entity.RequestId)
+                .HasMaxLength(96)
+                .IsRequired();
+            idempotencyKey.Property(entity => entity.RequestHash)
+                .HasMaxLength(128)
+                .IsRequired();
+            idempotencyKey.Property(entity => entity.ResponseJson)
+                .HasMaxLength(32_768)
+                .IsRequired();
+            idempotencyKey.Property(entity => entity.CreatedAtUtc)
+                .IsRequired();
+            idempotencyKey.HasIndex(entity => new { entity.AccountId, entity.Action, entity.RequestId })
+                .IsUnique();
+
+            idempotencyKey.HasOne(entity => entity.Account)
+                .WithMany()
+                .HasForeignKey(entity => entity.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+            idempotencyKey.HasOne(entity => entity.Player)
+                .WithMany()
+                .HasForeignKey(entity => entity.PlayerId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

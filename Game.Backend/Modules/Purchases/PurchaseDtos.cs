@@ -1,6 +1,7 @@
 namespace Game.Backend.Modules.Purchases;
 
 public sealed record ValidatePurchaseRequest(
+    string? RequestId,
     Guid PlayerId,
     string? Store,
     string? ProductId,

@@ -52,7 +52,12 @@ Authorization: Bearer {{AccessToken}}
 ###
 
 POST {{Game.Backend_HostAddress}}/api/v1/players/00000000-0000-0000-0000-000000000000/resources/claim-offline
+Content-Type: application/json
 Authorization: Bearer {{AccessToken}}
+
+{
+  "requestId": "claim-offline-request-001"
+}
 
 ###
 
@@ -61,6 +66,7 @@ Content-Type: application/json
 Authorization: Bearer {{AccessToken}}
 
 {
+  "requestId": "purchase-request-001",
   "playerId": "00000000-0000-0000-0000-000000000000",
   "store": "local_mock",
   "productId": "cosmetic_avatar_skin_neon",

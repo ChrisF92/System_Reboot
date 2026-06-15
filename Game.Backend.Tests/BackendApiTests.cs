@@ -117,7 +117,7 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
 
         var claim = await _client.PostAsJsonAsync(
             $"/api/v1/players/{player.PlayerId}/resources/claim-offline",
-            value: new { });
+            new ClaimOfflineResourcesRequest("offline-cap-request"));
 
         Assert.Equal(HttpStatusCode.OK, claim.StatusCode);
 
@@ -145,12 +145,12 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
 
         var firstClaim = await _client.PostAsJsonAsync(
             $"/api/v1/players/{player.PlayerId}/resources/claim-offline",
-            value: new { });
+            new ClaimOfflineResourcesRequest("rapid-first-request"));
         firstClaim.EnsureSuccessStatusCode();
 
         var secondClaim = await _client.PostAsJsonAsync(
             $"/api/v1/players/{player.PlayerId}/resources/claim-offline",
-            value: new { });
+            new ClaimOfflineResourcesRequest("rapid-second-request"));
         secondClaim.EnsureSuccessStatusCode();
 
         var result = await secondClaim.Content.ReadFromJsonAsync<OfflineResourceClaimResponse>(JsonOptions.Default);
@@ -161,6 +161,60 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
         Assert.Equal(3_600, result.Resources.Matter);
         Assert.Equal(2_160, result.Resources.Energy);
         Assert.Equal(1_260, result.Resources.Data);
+    }
+
+    [Fact]
+    public async Task Resources_ClaimOffline_ReplaysIdenticalRetry()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("ReplayResource");
+        await SetLastResourceClaimedAtUtcAsync(
+            player.PlayerId,
+            DateTimeOffset.UtcNow.AddHours(-3));
+        var request = new ClaimOfflineResourcesRequest("resource-replay-request");
+
+        var firstClaim = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/resources/claim-offline",
+            request);
+        firstClaim.EnsureSuccessStatusCode();
+        var firstResult = await firstClaim.Content.ReadFromJsonAsync<OfflineResourceClaimResponse>(JsonOptions.Default);
+
+        var retryClaim = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/resources/claim-offline",
+            request);
+        retryClaim.EnsureSuccessStatusCode();
+        var retryResult = await retryClaim.Content.ReadFromJsonAsync<OfflineResourceClaimResponse>(JsonOptions.Default);
+
+        Assert.NotNull(firstResult);
+        Assert.NotNull(retryResult);
+        Assert.Equal(firstResult.Gains.Matter, retryResult.Gains.Matter);
+        Assert.Equal(firstResult.Gains.Energy, retryResult.Gains.Energy);
+        Assert.Equal(firstResult.Gains.Data, retryResult.Gains.Data);
+        Assert.Equal(firstResult.Resources.Matter, retryResult.Resources.Matter);
+        Assert.Equal(firstResult.ClaimedAtUtc, retryResult.ClaimedAtUtc);
+    }
+
+    [Fact]
+    public async Task Resources_ClaimOffline_RejectsReusedRequestIdWithDifferentPlayer()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var firstPlayer = await CreatePlayerAsync("ResourceFirst");
+        var secondPlayer = await CreatePlayerAsync("ResourceSecond");
+        var request = new ClaimOfflineResourcesRequest("resource-mismatch-request");
+
+        var firstClaim = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{firstPlayer.PlayerId}/resources/claim-offline",
+            request);
+        firstClaim.EnsureSuccessStatusCode();
+
+        var mismatchClaim = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{secondPlayer.PlayerId}/resources/claim-offline",
+            request);
+
+        Assert.Equal(HttpStatusCode.Conflict, mismatchClaim.StatusCode);
+
+        var json = await mismatchClaim.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"idempotency_key_conflict\"", json);
     }
 
     [Fact]
@@ -212,17 +266,73 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
         var request = CreatePurchaseRequest(
             player.PlayerId,
             "ui_theme_static",
-            "tx-duplicate-001");
+            "tx-duplicate-001",
+            "duplicate-original-request");
 
         var firstResponse = await _client.PostAsJsonAsync("/api/v1/purchases/validate", request);
         firstResponse.EnsureSuccessStatusCode();
 
-        var duplicateResponse = await _client.PostAsJsonAsync("/api/v1/purchases/validate", request);
+        var duplicateResponse = await _client.PostAsJsonAsync(
+            "/api/v1/purchases/validate",
+            request with { RequestId = "duplicate-second-request" });
 
         Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
 
         var json = await duplicateResponse.Content.ReadAsStringAsync();
         Assert.Contains("\"code\":\"duplicate_receipt\"", json);
+    }
+
+    [Fact]
+    public async Task Purchases_Validate_ReplaysIdenticalRetry()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("PurchaseReplay");
+        var request = CreatePurchaseRequest(
+            player.PlayerId,
+            "profile_frame_founder",
+            "tx-replay-001",
+            "purchase-replay-request");
+
+        var firstResponse = await _client.PostAsJsonAsync("/api/v1/purchases/validate", request);
+        firstResponse.EnsureSuccessStatusCode();
+        var firstPurchase = await firstResponse.Content.ReadFromJsonAsync<ValidatePurchaseResponse>(JsonOptions.Default);
+
+        var retryResponse = await _client.PostAsJsonAsync("/api/v1/purchases/validate", request);
+        retryResponse.EnsureSuccessStatusCode();
+        var retryPurchase = await retryResponse.Content.ReadFromJsonAsync<ValidatePurchaseResponse>(JsonOptions.Default);
+
+        Assert.NotNull(firstPurchase);
+        Assert.NotNull(retryPurchase);
+        Assert.Equal(firstPurchase.PurchaseReceiptId, retryPurchase.PurchaseReceiptId);
+        Assert.Equal(firstPurchase.EntitlementId, retryPurchase.EntitlementId);
+        Assert.Equal(firstPurchase.ValidatedAtUtc, retryPurchase.ValidatedAtUtc);
+    }
+
+    [Fact]
+    public async Task Purchases_Validate_RejectsReusedRequestIdWithDifferentPayload()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("PurchaseMismatch");
+        var request = CreatePurchaseRequest(
+            player.PlayerId,
+            "cosmetic_avatar_skin_neon",
+            "tx-mismatch-001",
+            "purchase-mismatch-request");
+
+        var firstResponse = await _client.PostAsJsonAsync("/api/v1/purchases/validate", request);
+        firstResponse.EnsureSuccessStatusCode();
+
+        var mismatchRequest = CreatePurchaseRequest(
+            player.PlayerId,
+            "ui_theme_static",
+            "tx-mismatch-002",
+            "purchase-mismatch-request");
+        var mismatchResponse = await _client.PostAsJsonAsync("/api/v1/purchases/validate", mismatchRequest);
+
+        Assert.Equal(HttpStatusCode.Conflict, mismatchResponse.StatusCode);
+
+        var json = await mismatchResponse.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"idempotency_key_conflict\"", json);
     }
 
     [Fact]
@@ -530,9 +640,11 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
     private static ValidatePurchaseRequest CreatePurchaseRequest(
         Guid playerId,
         string productId,
-        string transactionId)
+        string transactionId,
+        string? requestId = null)
     {
         return new ValidatePurchaseRequest(
+            requestId ?? $"request-{transactionId}",
             playerId,
             "local_mock",
             productId,

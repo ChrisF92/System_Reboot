@@ -30,11 +30,13 @@ public sealed class ResourcesController : ControllerBase
     [HttpPost("claim-offline")]
     public async Task<ActionResult<OfflineResourceClaimResponse>> ClaimOffline(
         Guid playerId,
+        ClaimOfflineResourcesRequest? request,
         CancellationToken cancellationToken)
     {
         return await _resourceService.ClaimOfflineResourcesAsync(
             CurrentAccount.GetAccountId(User),
             playerId,
+            request,
             cancellationToken);
     }
 }

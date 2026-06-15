@@ -26,10 +26,11 @@ Repositories use EF Core with SQLite. The default local database is `system-rebo
 - Player and cloud-save access is limited to the owning account.
 - Resource balances and offline claims are calculated by the backend, not accepted from cloud-save JSON.
 - Purchases require an owned player, validated receipt, and non-power product id.
+- Offline resource claims and purchase validation require `requestId` for idempotent retries.
 
 ## Next backend steps
 
 1. Replace the local mock purchase validator with real Android purchase validation.
-2. Add request idempotency for high-risk reward, purchase, and currency actions.
-3. Add rate limits for auth, save, resource, and purchase endpoints.
-4. Move additional progression state out of opaque cloud-save JSON as gameplay systems come online.
+2. Add rate limits for auth, save, resource, and purchase endpoints.
+3. Move additional progression state out of opaque cloud-save JSON as gameplay systems come online.
+4. Add idempotency to future reward, grant, and spend actions as those modules are introduced.

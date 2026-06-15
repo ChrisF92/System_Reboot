@@ -1,4 +1,5 @@
 using Game.Backend.Modules.GameConfig;
+using Game.Backend.Modules.Idempotency;
 using Game.Backend.Modules.Players;
 using Game.Backend.Shared.Errors;
 
@@ -9,17 +10,20 @@ public sealed class ResourceService
     private readonly ResourceRepository _resourceRepository;
     private readonly PlayerService _playerService;
     private readonly GameConfigService _gameConfigService;
+    private readonly IdempotencyService _idempotencyService;
     private readonly TimeProvider _timeProvider;
 
     public ResourceService(
         ResourceRepository resourceRepository,
         PlayerService playerService,
         GameConfigService gameConfigService,
+        IdempotencyService idempotencyService,
         TimeProvider timeProvider)
     {
         _resourceRepository = resourceRepository;
         _playerService = playerService;
         _gameConfigService = gameConfigService;
+        _idempotencyService = idempotencyService;
         _timeProvider = timeProvider;
     }
 
@@ -36,8 +40,32 @@ public sealed class ResourceService
     public async Task<OfflineResourceClaimResponse> ClaimOfflineResourcesAsync(
         Guid accountId,
         Guid playerId,
+        ClaimOfflineResourcesRequest? request,
         CancellationToken cancellationToken)
     {
+        if (request is null)
+        {
+            throw new ValidationException(
+                "missing_resource_claim_request",
+                "Resource claim request is required.");
+        }
+
+        var requestId = _idempotencyService.ValidateRequestId(request.RequestId);
+        var requestHash = _idempotencyService.HashPayload(new
+        {
+            playerId
+        });
+        var replay = await _idempotencyService.GetReplayAsync<OfflineResourceClaimResponse>(
+            accountId,
+            "resources.claim_offline",
+            requestId,
+            requestHash,
+            cancellationToken);
+        if (replay is not null)
+        {
+            return replay;
+        }
+
         await _playerService.EnsurePlayerOwnedByAccountAsync(accountId, playerId, cancellationToken);
 
         var state = await GetResourceStateAsync(playerId, cancellationToken);
@@ -49,7 +77,17 @@ public sealed class ResourceService
 
         if (!gain.HasAnyGain)
         {
-            return ToClaimResponse(state, gain, elapsedSeconds, appliedSeconds, claimedAtUtc);
+            var noGainResponse = ToClaimResponse(state, gain, elapsedSeconds, appliedSeconds, claimedAtUtc);
+            await _idempotencyService.StoreResponseAsync(
+                accountId,
+                playerId,
+                "resources.claim_offline",
+                requestId,
+                requestHash,
+                noGainResponse,
+                cancellationToken);
+
+            return noGainResponse;
         }
 
         var updatedState = await _resourceRepository.AddOfflineGainsAsync(
@@ -63,7 +101,17 @@ public sealed class ResourceService
             throw new NotFoundException("player_not_found", "Player profile was not found.");
         }
 
-        return ToClaimResponse(updatedState, gain, elapsedSeconds, appliedSeconds, claimedAtUtc);
+        var response = ToClaimResponse(updatedState, gain, elapsedSeconds, appliedSeconds, claimedAtUtc);
+        await _idempotencyService.StoreResponseAsync(
+            accountId,
+            playerId,
+            "resources.claim_offline",
+            requestId,
+            requestHash,
+            response,
+            cancellationToken);
+
+        return response;
     }
 
     private async Task<PlayerResourceState> GetResourceStateAsync(
