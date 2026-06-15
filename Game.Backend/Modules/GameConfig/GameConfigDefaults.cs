@@ -20,6 +20,45 @@ public static class GameConfigDefaults
             new TrainingStatDefinitionResponse("efficiency", "Efficiency", 8, 4, 4),
             new TrainingStatDefinitionResponse("bandwidth", "Bandwidth", 5, 5, 5)
         ]),
+        Upgrades: new UpgradeConfig(
+        [
+            new UpgradeDefinitionResponse(
+                "core_processing_booster",
+                "Core Processing Booster",
+                "Improves Processing-focused progression hooks.",
+                25,
+                10,
+                5,
+                "processing_bonus",
+                0.05m),
+            new UpgradeDefinitionResponse(
+                "matter_harvester",
+                "Matter Harvester",
+                "Improves Matter-focused progression hooks.",
+                30,
+                5,
+                0,
+                "matter_generation_bonus",
+                0.10m),
+            new UpgradeDefinitionResponse(
+                "energy_conduit",
+                "Energy Conduit",
+                "Improves Energy-focused progression hooks.",
+                15,
+                25,
+                0,
+                "energy_generation_bonus",
+                0.10m),
+            new UpgradeDefinitionResponse(
+                "data_lattice",
+                "Data Lattice",
+                "Improves Data-focused progression hooks.",
+                10,
+                10,
+                15,
+                "data_generation_bonus",
+                0.10m)
+        ]),
         Combat: new CombatConfig(
             EarlyLoadoutSlots: 3,
             NormalEncounterMinimumSeconds: 10,

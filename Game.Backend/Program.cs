@@ -9,6 +9,7 @@ using Game.Backend.Modules.Players;
 using Game.Backend.Modules.Purchases;
 using Game.Backend.Modules.Resources;
 using Game.Backend.Modules.Training;
+using Game.Backend.Modules.Upgrades;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 
@@ -52,6 +53,8 @@ builder.Services.AddScoped<GameConfigRepository>();
 builder.Services.AddScoped<GameConfigService>();
 builder.Services.AddScoped<TrainingRepository>();
 builder.Services.AddScoped<TrainingService>();
+builder.Services.AddScoped<UpgradeRepository>();
+builder.Services.AddScoped<UpgradeService>();
 
 var app = builder.Build();
 

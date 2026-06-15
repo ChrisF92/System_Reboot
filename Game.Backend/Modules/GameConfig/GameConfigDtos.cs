@@ -5,6 +5,7 @@ public sealed record GameConfigResponse(
     ResourceGenerationConfig Resources,
     OfflineProgressConfig OfflineProgress,
     TrainingConfig Training,
+    UpgradeConfig Upgrades,
     CombatConfig Combat,
     IReadOnlyList<ResourceDefinitionResponse> ResourceDefinitions);
 
@@ -25,6 +26,18 @@ public sealed record TrainingStatDefinitionResponse(
     long MatterCost,
     long EnergyCost,
     long DataCost);
+
+public sealed record UpgradeConfig(IReadOnlyList<UpgradeDefinitionResponse> Items);
+
+public sealed record UpgradeDefinitionResponse(
+    string UpgradeId,
+    string DisplayName,
+    string Description,
+    long MatterCost,
+    long EnergyCost,
+    long DataCost,
+    string EffectType,
+    decimal EffectValuePerLevel);
 
 public sealed record CombatConfig(
     int EarlyLoadoutSlots,

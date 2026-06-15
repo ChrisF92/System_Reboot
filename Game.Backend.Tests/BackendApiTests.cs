@@ -10,6 +10,7 @@ using Game.Backend.Modules.Players;
 using Game.Backend.Modules.Purchases;
 using Game.Backend.Modules.Resources;
 using Game.Backend.Modules.Training;
+using Game.Backend.Modules.Upgrades;
 using Microsoft.EntityFrameworkCore;
 
 namespace Game.Backend.Tests;
@@ -358,6 +359,139 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
         Authorize(_client, intruderAuth.AccessToken);
 
         var response = await _client.GetAsync($"/api/v1/players/{player.PlayerId}/training");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.NotEqual(ownerAuth.AccountId, intruderAuth.AccountId);
+
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"player_forbidden\"", json);
+    }
+
+    [Fact]
+    public async Task Upgrades_Get_ReturnsConfiguredUpgradesWithStartingLevels()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("UpgradeListNode");
+
+        var upgrades = await _client.GetFromJsonAsync<PlayerUpgradesResponse>(
+            $"/api/v1/players/{player.PlayerId}/upgrades",
+            JsonOptions.Default);
+
+        Assert.NotNull(upgrades);
+        Assert.Equal(player.PlayerId, upgrades.PlayerId);
+        Assert.All(upgrades.Upgrades, upgrade => Assert.Equal(0, upgrade.Level));
+
+        var matterHarvester = Assert.Single(upgrades.Upgrades, upgrade => upgrade.UpgradeId == "matter_harvester");
+        Assert.Equal("Matter Harvester", matterHarvester.DisplayName);
+        Assert.Equal(30, matterHarvester.NextPurchaseCost.Matter);
+        Assert.Equal(5, matterHarvester.NextPurchaseCost.Energy);
+        Assert.Equal(0, matterHarvester.NextPurchaseCost.Data);
+        Assert.Equal(0m, matterHarvester.Effect.TotalValue);
+    }
+
+    [Fact]
+    public async Task Upgrades_Purchase_SpendsResourcesAndIncrementsLevel()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("UpgradePurchaseNode");
+        await AddResourcesAsync(player.PlayerId, matter: 100, energy: 100, data: 100);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/upgrades/matter_harvester/purchase",
+            new PurchaseUpgradeRequest("upgrade-purchase-request"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var purchase = await response.Content.ReadFromJsonAsync<PurchaseUpgradeResponse>(JsonOptions.Default);
+        Assert.NotNull(purchase);
+        Assert.Equal("matter_harvester", purchase.Upgrade.UpgradeId);
+        Assert.Equal(1, purchase.Upgrade.Level);
+        Assert.Equal(30, purchase.CostPaid.Matter);
+        Assert.Equal(5, purchase.CostPaid.Energy);
+        Assert.Equal(0, purchase.CostPaid.Data);
+        Assert.Equal(70, purchase.Resources.Matter);
+        Assert.Equal(95, purchase.Resources.Energy);
+        Assert.Equal(100, purchase.Resources.Data);
+        Assert.Equal(60, purchase.Upgrade.NextPurchaseCost.Matter);
+        Assert.Equal(0.10m, purchase.Upgrade.Effect.TotalValue);
+    }
+
+    [Fact]
+    public async Task Upgrades_Purchase_RejectsInsufficientResources()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("PoorUpgradeNode");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/upgrades/matter_harvester/purchase",
+            new PurchaseUpgradeRequest("upgrade-insufficient-request"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"insufficient_resources\"", json);
+    }
+
+    [Fact]
+    public async Task Upgrades_Purchase_ReplaysIdenticalRetry()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("UpgradeReplayNode");
+        await AddResourcesAsync(player.PlayerId, matter: 100, energy: 100, data: 100);
+        var request = new PurchaseUpgradeRequest("upgrade-replay-request");
+
+        var firstResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/upgrades/energy_conduit/purchase",
+            request);
+        firstResponse.EnsureSuccessStatusCode();
+        var firstPurchase = await firstResponse.Content.ReadFromJsonAsync<PurchaseUpgradeResponse>(JsonOptions.Default);
+
+        var retryResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/upgrades/energy_conduit/purchase",
+            request);
+        retryResponse.EnsureSuccessStatusCode();
+        var retryPurchase = await retryResponse.Content.ReadFromJsonAsync<PurchaseUpgradeResponse>(JsonOptions.Default);
+
+        Assert.NotNull(firstPurchase);
+        Assert.NotNull(retryPurchase);
+        Assert.Equal(firstPurchase.Upgrade.Level, retryPurchase.Upgrade.Level);
+        Assert.Equal(firstPurchase.Resources.Matter, retryPurchase.Resources.Matter);
+        Assert.Equal(firstPurchase.Resources.Energy, retryPurchase.Resources.Energy);
+        Assert.Equal(firstPurchase.Resources.Data, retryPurchase.Resources.Data);
+    }
+
+    [Fact]
+    public async Task Upgrades_Purchase_RejectsReusedRequestIdWithDifferentUpgrade()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("UpgradeMismatchNode");
+        await AddResourcesAsync(player.PlayerId, matter: 100, energy: 100, data: 100);
+        var request = new PurchaseUpgradeRequest("upgrade-mismatch-request");
+
+        var firstResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/upgrades/matter_harvester/purchase",
+            request);
+        firstResponse.EnsureSuccessStatusCode();
+
+        var mismatchResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/upgrades/data_lattice/purchase",
+            request);
+
+        Assert.Equal(HttpStatusCode.Conflict, mismatchResponse.StatusCode);
+
+        var json = await mismatchResponse.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"idempotency_key_conflict\"", json);
+    }
+
+    [Fact]
+    public async Task Upgrades_RejectCrossAccountAccess()
+    {
+        var ownerAuth = await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("UpgradeOwner");
+        var intruderAuth = await RegisterAccountAsync(_client, CreateUniqueEmail("upgrade-intruder"));
+        Authorize(_client, intruderAuth.AccessToken);
+
+        var response = await _client.GetAsync($"/api/v1/players/{player.PlayerId}/upgrades");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.NotEqual(ownerAuth.AccountId, intruderAuth.AccountId);

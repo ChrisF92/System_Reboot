@@ -25,6 +25,8 @@ public sealed class GameDbContext : DbContext
 
     public DbSet<GameConfigVersionEntity> GameConfigVersions => Set<GameConfigVersionEntity>();
 
+    public DbSet<PlayerUpgradeEntity> PlayerUpgrades => Set<PlayerUpgradeEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<AccountEntity>(account =>
@@ -237,6 +239,24 @@ public sealed class GameDbContext : DbContext
             gameConfigVersion.Property(entity => entity.CreatedAtUtc)
                 .IsRequired();
             gameConfigVersion.HasIndex(entity => entity.IsActive);
+        });
+
+        modelBuilder.Entity<PlayerUpgradeEntity>(playerUpgrade =>
+        {
+            playerUpgrade.ToTable("PlayerUpgrades");
+            playerUpgrade.HasKey(entity => entity.PlayerUpgradeId);
+            playerUpgrade.Property(entity => entity.UpgradeId)
+                .HasMaxLength(64)
+                .IsRequired();
+            playerUpgrade.Property(entity => entity.Level)
+                .IsRequired();
+            playerUpgrade.HasIndex(entity => new { entity.PlayerId, entity.UpgradeId })
+                .IsUnique();
+
+            playerUpgrade.HasOne(entity => entity.Player)
+                .WithMany()
+                .HasForeignKey(entity => entity.PlayerId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

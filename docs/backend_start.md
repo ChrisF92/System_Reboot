@@ -11,6 +11,7 @@ This backend starts from the priorities in `system_reboot_gdd.md` and `cursor_cs
 - `Resources` owns server-authoritative Matter, Energy, Data balances and offline claims.
 - `Purchases` owns receipt validation and non-power entitlement grants.
 - `Training` owns server-authoritative stat levels and resource spending for stat upgrades.
+- `Upgrades` owns server-authoritative purchased upgrade levels and resource spending for upgrades.
 
 ## Current storage
 
@@ -27,8 +28,9 @@ Repositories use EF Core with SQLite. The default local database is `system-rebo
 - Player and cloud-save access is limited to the owning account.
 - Resource balances and offline claims are calculated by the backend from active game config, not accepted from cloud-save JSON.
 - Training upgrades spend backend-owned resources using active game config costs.
+- Upgrade purchases spend backend-owned resources using active game config costs.
 - Purchases require an owned player, validated receipt, and non-power product id.
-- Offline resource claims, training upgrades, and purchase validation require `requestId` for idempotent retries.
+- Offline resource claims, training upgrades, upgrade purchases, and purchase validation require `requestId` for idempotent retries.
 
 ## Next backend steps
 
