@@ -85,7 +85,9 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
             $"system-reboot-restart-{Guid.NewGuid():N}.db");
         Guid playerId;
 
-        using (var firstFactory = new TestBackendFactory(databasePath, deleteDatabaseOnDispose: false))
+        using (var firstFactory = TestBackendFactory.CreateWithDatabasePath(
+            databasePath,
+            deleteDatabaseOnDispose: false))
         {
             var firstClient = firstFactory.CreateClient();
             var player = await CreatePlayerAsync(firstClient, "DurableNode");
@@ -110,7 +112,9 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
             Assert.Equal(HttpStatusCode.OK, saveResponse.StatusCode);
         }
 
-        using (var secondFactory = new TestBackendFactory(databasePath))
+        using (var secondFactory = TestBackendFactory.CreateWithDatabasePath(
+            databasePath,
+            deleteDatabaseOnDispose: true))
         {
             var secondClient = secondFactory.CreateClient();
             var latestSave = await secondClient.GetFromJsonAsync<CloudSaveResponse>(

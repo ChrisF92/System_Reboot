@@ -11,7 +11,7 @@ public sealed class TestBackendFactory : WebApplicationFactory<Program>
     {
     }
 
-    public TestBackendFactory(string databasePath, bool deleteDatabaseOnDispose = true)
+    private TestBackendFactory(string databasePath, bool deleteDatabaseOnDispose)
     {
         DatabasePath = databasePath;
         _deleteDatabaseOnDispose = deleteDatabaseOnDispose;
@@ -20,6 +20,13 @@ public sealed class TestBackendFactory : WebApplicationFactory<Program>
     private readonly bool _deleteDatabaseOnDispose;
 
     public string DatabasePath { get; }
+
+    public static TestBackendFactory CreateWithDatabasePath(
+        string databasePath,
+        bool deleteDatabaseOnDispose)
+    {
+        return new TestBackendFactory(databasePath, deleteDatabaseOnDispose);
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
