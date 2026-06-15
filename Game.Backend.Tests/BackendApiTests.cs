@@ -2,19 +2,24 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Game.Backend.Database;
 using Game.Backend.Modules.Auth;
 using Game.Backend.Modules.CloudSaves;
 using Game.Backend.Modules.GameConfig;
 using Game.Backend.Modules.Players;
+using Game.Backend.Modules.Resources;
+using Microsoft.EntityFrameworkCore;
 
 namespace Game.Backend.Tests;
 
 public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
 {
+    private readonly TestBackendFactory _factory;
     private readonly HttpClient _client;
 
     public BackendApiTests(TestBackendFactory factory)
     {
+        _factory = factory;
         _client = factory.CreateClient();
     }
 
@@ -80,6 +85,98 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
         Assert.Equal("test-checksum", latestSave.Checksum);
         Assert.Contains("\"matter\": 25", latestSave.SaveJson);
         Assert.True(latestSave.SavedAtUtc > DateTimeOffset.MinValue);
+    }
+
+    [Fact]
+    public async Task Resources_Get_ReturnsServerOwnedStartingBalances()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("ResourceNode");
+
+        var resources = await _client.GetFromJsonAsync<PlayerResourcesResponse>(
+            $"/api/v1/players/{player.PlayerId}/resources",
+            JsonOptions.Default);
+
+        Assert.NotNull(resources);
+        Assert.Equal(player.PlayerId, resources.PlayerId);
+        Assert.Equal(0, resources.Resources.Matter);
+        Assert.Equal(0, resources.Resources.Energy);
+        Assert.Equal(0, resources.Resources.Data);
+        Assert.True(resources.LastResourceClaimedAtUtc >= player.CreatedAtUtc.AddSeconds(-1));
+    }
+
+    [Fact]
+    public async Task Resources_ClaimOffline_AppliesConfiguredCapAndEfficiency()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("OfflineNode");
+        await SetLastResourceClaimedAtUtcAsync(
+            player.PlayerId,
+            DateTimeOffset.UtcNow.AddHours(-3));
+
+        var claim = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/resources/claim-offline",
+            value: new { });
+
+        Assert.Equal(HttpStatusCode.OK, claim.StatusCode);
+
+        var result = await claim.Content.ReadFromJsonAsync<OfflineResourceClaimResponse>(JsonOptions.Default);
+        Assert.NotNull(result);
+        Assert.Equal(player.PlayerId, result.PlayerId);
+        Assert.True(result.ElapsedSeconds >= 7_200);
+        Assert.Equal(7_200, result.AppliedSeconds);
+        Assert.Equal(3_600, result.Gains.Matter);
+        Assert.Equal(2_160, result.Gains.Energy);
+        Assert.Equal(1_260, result.Gains.Data);
+        Assert.Equal(3_600, result.Resources.Matter);
+        Assert.Equal(2_160, result.Resources.Energy);
+        Assert.Equal(1_260, result.Resources.Data);
+    }
+
+    [Fact]
+    public async Task Resources_ClaimOffline_RapidDuplicateReturnsZeroGain()
+    {
+        await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("RapidNode");
+        await SetLastResourceClaimedAtUtcAsync(
+            player.PlayerId,
+            DateTimeOffset.UtcNow.AddHours(-3));
+
+        var firstClaim = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/resources/claim-offline",
+            value: new { });
+        firstClaim.EnsureSuccessStatusCode();
+
+        var secondClaim = await _client.PostAsJsonAsync(
+            $"/api/v1/players/{player.PlayerId}/resources/claim-offline",
+            value: new { });
+        secondClaim.EnsureSuccessStatusCode();
+
+        var result = await secondClaim.Content.ReadFromJsonAsync<OfflineResourceClaimResponse>(JsonOptions.Default);
+        Assert.NotNull(result);
+        Assert.Equal(0, result.Gains.Matter);
+        Assert.Equal(0, result.Gains.Energy);
+        Assert.Equal(0, result.Gains.Data);
+        Assert.Equal(3_600, result.Resources.Matter);
+        Assert.Equal(2_160, result.Resources.Energy);
+        Assert.Equal(1_260, result.Resources.Data);
+    }
+
+    [Fact]
+    public async Task Resources_RejectCrossAccountAccess()
+    {
+        var ownerAuth = await RegisterAndAuthorizeAsync(_client);
+        var player = await CreatePlayerAsync("ResourceOwner");
+        var intruderAuth = await RegisterAccountAsync(_client, CreateUniqueEmail("resource-intruder"));
+        Authorize(_client, intruderAuth.AccessToken);
+
+        var response = await _client.GetAsync($"/api/v1/players/{player.PlayerId}/resources");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.NotEqual(ownerAuth.AccountId, intruderAuth.AccountId);
+
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"player_forbidden\"", json);
     }
 
     [Fact]
@@ -325,6 +422,20 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
     private static string CreateUniqueEmail(string prefix)
     {
         return $"{prefix}-{Guid.NewGuid():N}@example.test";
+    }
+
+    private async Task SetLastResourceClaimedAtUtcAsync(
+        Guid playerId,
+        DateTimeOffset lastResourceClaimedAtUtc)
+    {
+        var options = new DbContextOptionsBuilder<GameDbContext>()
+            .UseSqlite($"Data Source={_factory.DatabasePath}")
+            .Options;
+
+        await using var dbContext = new GameDbContext(options);
+        var player = await dbContext.Players.SingleAsync(player => player.PlayerId == playerId);
+        player.LastResourceClaimedAtUtc = lastResourceClaimedAtUtc;
+        await dbContext.SaveChangesAsync();
     }
 
     private static class JsonOptions

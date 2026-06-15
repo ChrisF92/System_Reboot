@@ -8,6 +8,7 @@ This backend starts from the priorities in `system_reboot_gdd.md` and `cursor_cs
 - `CloudSaves` owns versioned save snapshots for the cloud-ready local save path.
 - `GameConfig` exposes safe, read-only balance/config values needed by Unity.
 - `Auth` owns account registration, login, and bearer sessions.
+- `Resources` owns server-authoritative Matter, Energy, Data balances and offline claims.
 
 ## Current storage
 
@@ -22,10 +23,11 @@ Repositories use EF Core with SQLite. The default local database is `system-rebo
 - The server assigns player IDs and cloud save timestamps.
 - Player and cloud-save routes require bearer authentication.
 - Player and cloud-save access is limited to the owning account.
+- Resource balances and offline claims are calculated by the backend, not accepted from cloud-save JSON.
 
 ## Next backend steps
 
-1. Replace opaque save snapshots with module-owned server state where backend authority is required.
-2. Add purchase validation before accepting premium-currency or store-related state.
-3. Add request idempotency for high-risk reward, purchase, and currency actions.
-4. Add rate limits for auth, save, and purchase endpoints.
+1. Add purchase validation before accepting premium-currency or store-related state.
+2. Add request idempotency for high-risk reward, purchase, and currency actions.
+3. Add rate limits for auth, save, resource, and purchase endpoints.
+4. Move additional progression state out of opaque cloud-save JSON as gameplay systems come online.

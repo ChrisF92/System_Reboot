@@ -27,6 +27,7 @@ public sealed class PlayerService
         }
 
         var displayName = ValidateDisplayName(request.DisplayName);
+        var now = _timeProvider.GetUtcNow();
         var player = new Player(
             Guid.NewGuid(),
             accountId,
@@ -34,7 +35,8 @@ public sealed class PlayerService
             Level: 1,
             Xp: 0,
             Resources: new ResourceWallet(0, 0, 0, 0, 0),
-            CreatedAtUtc: _timeProvider.GetUtcNow());
+            CreatedAtUtc: now,
+            LastResourceClaimedAtUtc: now);
 
         await _playerRepository.AddAsync(player, cancellationToken);
         return ToResponse(player);

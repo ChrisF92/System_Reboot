@@ -5,6 +5,7 @@ using Game.Backend.Modules.Auth;
 using Game.Backend.Modules.CloudSaves;
 using Game.Backend.Modules.GameConfig;
 using Game.Backend.Modules.Players;
+using Game.Backend.Modules.Resources;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 
@@ -36,6 +37,8 @@ builder.Services.AddScoped<PlayerRepository>();
 builder.Services.AddScoped<PlayerService>();
 builder.Services.AddScoped<CloudSaveRepository>();
 builder.Services.AddScoped<CloudSaveService>();
+builder.Services.AddScoped<ResourceRepository>();
+builder.Services.AddScoped<ResourceService>();
 builder.Services.AddSingleton<GameConfigService>();
 
 var app = builder.Build();

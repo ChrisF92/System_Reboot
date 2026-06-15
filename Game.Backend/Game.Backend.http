@@ -46,6 +46,16 @@ Authorization: Bearer {{AccessToken}}
 
 ###
 
+GET {{Game.Backend_HostAddress}}/api/v1/players/00000000-0000-0000-0000-000000000000/resources
+Authorization: Bearer {{AccessToken}}
+
+###
+
+POST {{Game.Backend_HostAddress}}/api/v1/players/00000000-0000-0000-0000-000000000000/resources/claim-offline
+Authorization: Bearer {{AccessToken}}
+
+###
+
 PUT {{Game.Backend_HostAddress}}/api/v1/cloud-saves/00000000-0000-0000-0000-000000000000
 Content-Type: application/json
 Authorization: Bearer {{AccessToken}}

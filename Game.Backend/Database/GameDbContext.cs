@@ -89,6 +89,8 @@ public sealed class GameDbContext : DbContext
                 .IsRequired();
             player.Property(entity => entity.CreatedAtUtc)
                 .IsRequired();
+            player.Property(entity => entity.LastResourceClaimedAtUtc)
+                .IsRequired();
 
             player.HasOne(entity => entity.Account)
                 .WithMany()

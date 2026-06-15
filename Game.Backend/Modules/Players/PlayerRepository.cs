@@ -42,7 +42,8 @@ public sealed class PlayerRepository
             Data = player.Resources.Data,
             CoreFragments = player.Resources.CoreFragments,
             QuantumCores = player.Resources.QuantumCores,
-            CreatedAtUtc = player.CreatedAtUtc
+            CreatedAtUtc = player.CreatedAtUtc,
+            LastResourceClaimedAtUtc = player.LastResourceClaimedAtUtc
         };
     }
 
@@ -60,6 +61,7 @@ public sealed class PlayerRepository
                 entity.Data,
                 entity.CoreFragments,
                 entity.QuantumCores),
-            entity.CreatedAtUtc);
+            entity.CreatedAtUtc,
+            entity.LastResourceClaimedAtUtc);
     }
 }

@@ -7,7 +7,8 @@ public sealed record Player(
     int Level,
     long Xp,
     ResourceWallet Resources,
-    DateTimeOffset CreatedAtUtc);
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset LastResourceClaimedAtUtc);
 
 public sealed record ResourceWallet(
     long Matter,

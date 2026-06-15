@@ -24,5 +24,7 @@ public sealed class PlayerEntity
 
     public DateTimeOffset CreatedAtUtc { get; set; }
 
+    public DateTimeOffset LastResourceClaimedAtUtc { get; set; }
+
     public AccountEntity? Account { get; set; }
 }
