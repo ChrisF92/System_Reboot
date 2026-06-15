@@ -4,15 +4,14 @@ using System.Text.Json;
 using Game.Backend.Modules.CloudSaves;
 using Game.Backend.Modules.GameConfig;
 using Game.Backend.Modules.Players;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Game.Backend.Tests;
 
-public sealed class BackendApiTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
 {
     private readonly HttpClient _client;
 
-    public BackendApiTests(WebApplicationFactory<Program> factory)
+    public BackendApiTests(TestBackendFactory factory)
     {
         _client = factory.CreateClient();
     }
@@ -79,6 +78,53 @@ public sealed class BackendApiTests : IClassFixture<WebApplicationFactory<Progra
     }
 
     [Fact]
+    public async Task CloudSave_PersistsAcrossRestartedBackendHost()
+    {
+        var databasePath = Path.Combine(
+            Path.GetTempPath(),
+            $"system-reboot-restart-{Guid.NewGuid():N}.db");
+        Guid playerId;
+
+        using (var firstFactory = new TestBackendFactory(databasePath, deleteDatabaseOnDispose: false))
+        {
+            var firstClient = firstFactory.CreateClient();
+            var player = await CreatePlayerAsync(firstClient, "DurableNode");
+            playerId = player.PlayerId;
+            var request = new UpsertCloudSaveRequest(
+                SaveVersion: 2,
+                SaveJson: """
+                    {
+                      "version": 2,
+                      "systemReboot": {
+                        "coreFragments": 1
+                      }
+                    }
+                    """,
+                Checksum: "restart-checksum",
+                ClientSavedAtUtc: DateTimeOffset.Parse("2026-06-15T16:10:00Z"));
+
+            var saveResponse = await firstClient.PutAsJsonAsync(
+                $"/api/v1/cloud-saves/{player.PlayerId}",
+                request);
+
+            Assert.Equal(HttpStatusCode.OK, saveResponse.StatusCode);
+        }
+
+        using (var secondFactory = new TestBackendFactory(databasePath))
+        {
+            var secondClient = secondFactory.CreateClient();
+            var latestSave = await secondClient.GetFromJsonAsync<CloudSaveResponse>(
+                $"/api/v1/cloud-saves/{playerId}",
+                JsonOptions.Default);
+
+            Assert.NotNull(latestSave);
+            Assert.Equal(2, latestSave.SaveVersion);
+            Assert.Equal("restart-checksum", latestSave.Checksum);
+            Assert.Contains("\"coreFragments\": 1", latestSave.SaveJson);
+        }
+    }
+
+    [Fact]
     public async Task CloudSave_RejectsInvalidJsonWithConsistentErrorEnvelope()
     {
         var player = await CreatePlayerAsync("GuardNode");
@@ -115,7 +161,14 @@ public sealed class BackendApiTests : IClassFixture<WebApplicationFactory<Progra
 
     private async Task<PlayerProfileResponse> CreatePlayerAsync(string displayName)
     {
-        var response = await _client.PostAsJsonAsync(
+        return await CreatePlayerAsync(_client, displayName);
+    }
+
+    private static async Task<PlayerProfileResponse> CreatePlayerAsync(
+        HttpClient client,
+        string displayName)
+    {
+        var response = await client.PostAsJsonAsync(
             "/api/v1/players",
             new CreatePlayerRequest(displayName));
 

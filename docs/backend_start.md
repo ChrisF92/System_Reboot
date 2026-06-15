@@ -10,7 +10,7 @@ This backend starts from the priorities in `system_reboot_gdd.md` and `cursor_cs
 
 ## Current storage
 
-Repositories are in memory for the first scaffold. They keep the HTTP contracts and service boundaries testable before a database provider is selected.
+Repositories use EF Core with SQLite. The default local database is `system-reboot.db`, and schema changes are tracked through migrations.
 
 ## Unity-facing contract rules
 
@@ -22,7 +22,7 @@ Repositories are in memory for the first scaffold. They keep the HTTP contracts 
 
 ## Next backend steps
 
-1. Choose the production persistence provider and add migrations.
-2. Add authentication before exposing player or save APIs publicly.
-3. Replace opaque save snapshots with module-owned server state where backend authority is required.
-4. Add purchase validation before accepting premium-currency or store-related state.
+1. Add authentication before exposing player or save APIs publicly.
+2. Replace opaque save snapshots with module-owned server state where backend authority is required.
+3. Add purchase validation before accepting premium-currency or store-related state.
+4. Add request idempotency for high-risk reward, purchase, and currency actions.

@@ -1,8 +1,10 @@
 using System.Text.Json;
+using Game.Backend.Database;
 using Game.Backend.Middleware;
 using Game.Backend.Modules.CloudSaves;
 using Game.Backend.Modules.GameConfig;
 using Game.Backend.Modules.Players;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,14 +13,27 @@ builder.Services.AddControllers()
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     });
+builder.Services.AddDbContext<GameDbContext>(options =>
+{
+    var connectionString = builder.Configuration.GetConnectionString("GameDatabase")
+        ?? throw new InvalidOperationException("Connection string 'GameDatabase' is required.");
+
+    options.UseSqlite(connectionString);
+});
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<PlayerRepository>();
-builder.Services.AddSingleton<PlayerService>();
-builder.Services.AddSingleton<CloudSaveRepository>();
-builder.Services.AddSingleton<CloudSaveService>();
+builder.Services.AddScoped<PlayerRepository>();
+builder.Services.AddScoped<PlayerService>();
+builder.Services.AddScoped<CloudSaveRepository>();
+builder.Services.AddScoped<CloudSaveService>();
 builder.Services.AddSingleton<GameConfigService>();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<GameDbContext>();
+    dbContext.Database.Migrate();
+}
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
