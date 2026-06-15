@@ -23,6 +23,8 @@ public sealed class GameDbContext : DbContext
 
     public DbSet<IdempotencyKeyEntity> IdempotencyKeys => Set<IdempotencyKeyEntity>();
 
+    public DbSet<GameConfigVersionEntity> GameConfigVersions => Set<GameConfigVersionEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<AccountEntity>(account =>
@@ -206,6 +208,23 @@ public sealed class GameDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(entity => entity.PlayerId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<GameConfigVersionEntity>(gameConfigVersion =>
+        {
+            gameConfigVersion.ToTable("GameConfigVersions");
+            gameConfigVersion.HasKey(entity => entity.ConfigVersion);
+            gameConfigVersion.Property(entity => entity.ConfigVersion)
+                .HasMaxLength(64)
+                .IsRequired();
+            gameConfigVersion.Property(entity => entity.ConfigJson)
+                .HasMaxLength(32_768)
+                .IsRequired();
+            gameConfigVersion.Property(entity => entity.IsActive)
+                .IsRequired();
+            gameConfigVersion.Property(entity => entity.CreatedAtUtc)
+                .IsRequired();
+            gameConfigVersion.HasIndex(entity => entity.IsActive);
         });
     }
 }

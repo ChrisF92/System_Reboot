@@ -71,7 +71,7 @@ public sealed class ResourceService
         var state = await GetResourceStateAsync(playerId, cancellationToken);
         var claimedAtUtc = _timeProvider.GetUtcNow();
         var elapsedSeconds = CalculateElapsedSeconds(state.LastResourceClaimedAtUtc, claimedAtUtc);
-        var config = _gameConfigService.GetCurrentConfig();
+        var config = await _gameConfigService.GetCurrentConfigAsync(cancellationToken);
         var appliedSeconds = Math.Min(elapsedSeconds, config.OfflineProgress.EarlyOfflineCapSeconds);
         var gain = CalculateGain(config.Resources, appliedSeconds, config.OfflineProgress.BaseOfflineEfficiency);
 

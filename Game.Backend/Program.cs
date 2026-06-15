@@ -47,7 +47,8 @@ builder.Services.AddSingleton<PurchaseProductCatalog>();
 builder.Services.AddSingleton<MockPurchaseReceiptValidator>();
 builder.Services.AddScoped<IdempotencyRepository>();
 builder.Services.AddScoped<IdempotencyService>();
-builder.Services.AddSingleton<GameConfigService>();
+builder.Services.AddScoped<GameConfigRepository>();
+builder.Services.AddScoped<GameConfigService>();
 
 var app = builder.Build();
 

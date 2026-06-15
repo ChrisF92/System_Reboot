@@ -585,6 +585,75 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
         Assert.Contains(config.ResourceDefinitions, resource => resource.ResourceId == "core_fragments");
     }
 
+    [Fact]
+    public async Task GameConfig_LoadsActiveConfigFromDatabase()
+    {
+        var databasePath = Path.Combine(
+            Path.GetTempPath(),
+            $"system-reboot-config-active-{Guid.NewGuid():N}.db");
+
+        using var factory = TestBackendFactory.CreateWithDatabasePath(
+            databasePath,
+            deleteDatabaseOnDispose: true);
+        var client = factory.CreateClient();
+        await ReplaceActiveGameConfigAsync(databasePath, GameConfigDefaults.InitialConfig with
+        {
+            ConfigVersion = "test-config-v2",
+            Resources = new ResourceGenerationConfig(
+                MatterPerSecond: 2.0m,
+                EnergyPerSecond: 1.0m,
+                DataPerSecond: 0.5m),
+            OfflineProgress = new OfflineProgressConfig(
+                EarlyOfflineCapSeconds: 3_600,
+                BaseOfflineEfficiency: 0.75m)
+        });
+
+        var config = await client.GetFromJsonAsync<GameConfigResponse>(
+            "/api/v1/game-config",
+            JsonOptions.Default);
+
+        Assert.NotNull(config);
+        Assert.Equal("test-config-v2", config.ConfigVersion);
+        Assert.Equal(2.0m, config.Resources.MatterPerSecond);
+        Assert.Equal(3_600, config.OfflineProgress.EarlyOfflineCapSeconds);
+        Assert.Equal(0.75m, config.OfflineProgress.BaseOfflineEfficiency);
+    }
+
+    [Fact]
+    public async Task GameConfig_PersistsAcrossRestartedBackendHost()
+    {
+        var databasePath = Path.Combine(
+            Path.GetTempPath(),
+            $"system-reboot-config-{Guid.NewGuid():N}.db");
+
+        using (var firstFactory = TestBackendFactory.CreateWithDatabasePath(
+            databasePath,
+            deleteDatabaseOnDispose: false))
+        {
+            var firstClient = firstFactory.CreateClient();
+            var config = await firstClient.GetFromJsonAsync<GameConfigResponse>(
+                "/api/v1/game-config",
+                JsonOptions.Default);
+
+            Assert.NotNull(config);
+            Assert.Equal("system-reboot-config-v1", config.ConfigVersion);
+        }
+
+        using (var secondFactory = TestBackendFactory.CreateWithDatabasePath(
+            databasePath,
+            deleteDatabaseOnDispose: true))
+        {
+            var secondClient = secondFactory.CreateClient();
+            var config = await secondClient.GetFromJsonAsync<GameConfigResponse>(
+                "/api/v1/game-config",
+                JsonOptions.Default);
+
+            Assert.NotNull(config);
+            Assert.Equal("system-reboot-config-v1", config.ConfigVersion);
+            Assert.Equal(7_200, config.OfflineProgress.EarlyOfflineCapSeconds);
+        }
+    }
+
     private async Task<PlayerProfileResponse> CreatePlayerAsync(string displayName)
     {
         return await CreatePlayerAsync(_client, displayName);
@@ -662,6 +731,32 @@ public sealed class BackendApiTests : IClassFixture<TestBackendFactory>
         await using var dbContext = new GameDbContext(options);
         var player = await dbContext.Players.SingleAsync(player => player.PlayerId == playerId);
         player.LastResourceClaimedAtUtc = lastResourceClaimedAtUtc;
+        await dbContext.SaveChangesAsync();
+    }
+
+    private static async Task ReplaceActiveGameConfigAsync(string databasePath, GameConfigResponse config)
+    {
+        var options = new DbContextOptionsBuilder<GameDbContext>()
+            .UseSqlite($"Data Source={databasePath}")
+            .Options;
+
+        await using var dbContext = new GameDbContext(options);
+        var activeConfigs = await dbContext.GameConfigVersions.ToListAsync();
+        foreach (var activeConfig in activeConfigs)
+        {
+            activeConfig.IsActive = false;
+            activeConfig.ActivatedAtUtc = null;
+        }
+
+        dbContext.GameConfigVersions.Add(new GameConfigVersionEntity
+        {
+            ConfigVersion = config.ConfigVersion,
+            ConfigJson = JsonSerializer.Serialize(config, JsonOptions.Default),
+            IsActive = true,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            ActivatedAtUtc = DateTimeOffset.UtcNow
+        });
+
         await dbContext.SaveChangesAsync();
     }
 

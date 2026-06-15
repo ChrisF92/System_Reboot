@@ -14,8 +14,8 @@ public sealed class GameConfigController : ControllerBase
     }
 
     [HttpGet]
-    public ActionResult<GameConfigResponse> GetCurrent()
+    public async Task<ActionResult<GameConfigResponse>> GetCurrent(CancellationToken cancellationToken)
     {
-        return _gameConfigService.GetCurrentConfig();
+        return await _gameConfigService.GetCurrentConfigAsync(cancellationToken);
     }
 }
